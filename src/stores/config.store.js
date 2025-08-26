@@ -15,6 +15,8 @@ const FINISHES = {
   "96CA": ["LBLG", "LBL", "SA", "LNOG", "BI", "BR"],
 };
 
+const SIMPLE_RAIL_ALLOWED_FINISHES = ["BR", "SA", "LBL", "LNOG"];
+
 const FINISH_LABEL = {
   LBL: "Laqué Blanc 9010",
   LBLG: "Laqué Blanc 9003 Granité",
@@ -101,9 +103,14 @@ export const useConfigStore = defineStore("config", {
       const r = String(s.range);
       const t = String(s.tick);
 
-      const codes = Array.isArray(FINISHES[r])
+      const baseCodes = Array.isArray(FINISHES[r])
         ? FINISHES[r]
         : FINISHES[r]?.[t] || [];
+
+      const codes =
+        s.rail === "simple"
+          ? baseCodes.filter((c) => SIMPLE_RAIL_ALLOWED_FINISHES.includes(c))
+          : baseCodes;
 
       return codes.map((code) => ({
         value: code,
@@ -161,6 +168,13 @@ export const useConfigStore = defineStore("config", {
         return;
       }
       this.rail = String(v) === "simple" ? "simple" : "double";
+
+      if (this.rail === "simple") {
+        const allowedFinishes = this.finishOptions.map((o) => o.value); // déjà filtrées par rail simple
+        if (!allowedFinishes.includes(this.colorProfiles)) {
+          this.setColorProfile(allowedFinishes[0] || "");
+        }
+      }
     },
 
     setTick(v) {

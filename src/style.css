@@ -22,12 +22,14 @@ body {
 }
 
 header {
-  justify-items: center;
-  margin-bottom: 50px;
+  text-align: center;
 }
 
 h1 {
-  border-bottom: 4px solid #f2cc84;
+  /* border-bottom: 4px solid #f2cc84; */
+  border: 4px solid #f2cc84;
+  padding: 5px 10px;
+  display: inline-block;
 }
 
 h3 {

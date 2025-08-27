@@ -209,122 +209,76 @@ export const useConfigStore = defineStore("config", {
       this.height = Math.max(0, Math.floor(Number(mm) || 0));
     },
 
-    // // --- Traverses ---
-    // setTraverseType(type) {
-    //   this.traverses.type = String(type);
-    // },
-
-    // setTraverseCount(count) {
-    //   const n = Math.max(0, Math.floor(Number(count) || 0));
-    //   this.traverses.count = n;
-
-    //   // Adapter le tableau de hauteurs du premier groupe
-    //   const g0 = this.traverses.groups[0];
-    //   if (!g0) this.traverses.groups[0] = { heights: [] };
-
-    //   const arr = this.traverses.groups[0].heights || [];
-    //   if (n > arr.length) {
-    //     // on complète par des zéros (les calculators s’occuperont du vrai placement)
-    //     this.traverses.groups[0].heights = arr.concat(
-    //       Array(n - arr.length).fill(0)
-    //     );
-    //   } else {
-    //     // on coupe si besoin
-    //     this.traverses.groups[0].heights = arr.slice(0, n);
-    //   }
-    // },
-
-    // setTraverseHeight(index, value, groupIndex = 0) {
-    //   const n = Math.max(0, Math.floor(Number(value) || 0));
-    //   const group =
-    //     this.traverses.groups[groupIndex] ||
-    //     (this.traverses.groups[groupIndex] = { heights: [] });
-    //   const count = this.traverses.count;
-
-    //   if (index < 0 || index >= count) return;
-    //   // on s’assure que le tableau a la bonne taille
-    //   while (group.heights.length < count) group.heights.push(0);
-    //   group.heights[index] = n;
-
-    //   // si configuration identique pour tous les vantaux
-    //   if (this.traverses.sameForAllLeaves) {
-    //     for (let gi = 1; gi < this.traverses.groups.length; gi++) {
-    //       const g =
-    //         this.traverses.groups[gi] ||
-    //         (this.traverses.groups[gi] = { heights: [] });
-    //       while (g.heights.length < count) g.heights.push(0);
-    //       g.heights[index] = n;
-    //     }
-    //   }
-    // },
-
-    // toggleSameTraverses(value) {
-    //   this.traverses.sameForAllLeaves = !!value;
-    // },
-
-    // /**
-    //  * Réinitialise les hauteurs (0). Le calcul automatique d’un placement
-    //  * “joli” est volontairement laissé aux calculators pour garder le store simple.
-    //  */
-    // resetTraverseHeights(groupIndex = 0) {
-    //   const count = this.traverses.count;
-    //   const group =
-    //     this.traverses.groups[groupIndex] ||
-    //     (this.traverses.groups[groupIndex] = { heights: [] });
-    //   group.heights = Array.from({ length: count }, () => 0);
-
-    //   if (this.traverses.sameForAllLeaves) {
-    //     for (let gi = 1; gi < this.traverses.groups.length; gi++) {
-    //       if (!this.traverses.groups[gi])
-    //         this.traverses.groups[gi] = { heights: [] };
-    //       this.traverses.groups[gi].heights = Array.from(
-    //         { length: count },
-    //         () => 0
-    //       );
-    //     }
-    //   }
-    // },
-
-    // // --- Options ---
-    // setFreins({ frlamelle, fram, freco } = {}) {
-    //   if (frlamelle != null)
-    //     this.options.frlamelle = Math.max(
-    //       0,
-    //       Math.floor(Number(frlamelle) || 0)
-    //     );
-    //   if (fram != null)
-    //     this.options.fram = Math.max(0, Math.floor(Number(fram) || 0));
-    //   if (freco != null)
-    //     this.options.freco = Math.max(0, Math.floor(Number(freco) || 0));
-    // },
-
-    // // (optionnel) initialisation rapide si tu veux changer le preset par défaut
-    // loadPreset(preset) {
-    //   // preset attendu au format partiel du state
-    //   // ex: { gamme:'96CA', rail:'double', width:1000, height:2000, traverses:{...}, options:{...} }
-    //   // on applique proprement :
-    //   if (preset?.gamme != null) this.setGamme(preset.gamme);
-    //   if (preset?.rail != null) this.setRail(preset.rail);
-    //   if (preset?.width != null) this.setWidth(preset.width);
-    //   if (preset?.height != null) this.setHeight(preset.height);
-
-    //   if (preset?.traverses) {
-    //     const t = preset.traverses;
-    //     if (t.type != null) this.setTraverseType(t.type);
-    //     if (t.count != null) this.setTraverseCount(t.count);
-    //     if (Array.isArray(t.groups)) {
-    //       // remplace les groupes (en gardant la même structure)
-    //       this.traverses.groups = t.groups.map((g) => ({
-    //         heights: Array.isArray(g.heights) ? g.heights.slice() : [],
-    //       }));
-    //     }
-    //     if (t.sameForAllLeaves != null)
-    //       this.traverses.sameForAllLeaves = !!t.sameForAllLeaves;
-    //   }
-
-    //   if (preset?.options) {
-    //     this.setFreins(preset.options);
-    //   }
-    // },
+    setTraverseType(type) {
+      this.traverses.type = String(type);
+      if (this.traverses.groups?.[0])
+        this.traverses.groups[0].type = String(type);
+    },
+    setTraverseCount(count) {
+      const n = Math.max(0, Math.floor(Number(count) || 0));
+      this.traverses.count = n;
+      const g0 =
+        this.traverses.groups[0] ||
+        (this.traverses.groups[0] = {
+          type: this.traverses.type,
+          count: n,
+          heights: [],
+        });
+      while (g0.heights.length < n) g0.heights.push(0);
+      if (g0.heights.length > n) g0.heights = g0.heights.slice(0, n);
+      g0.count = n;
+    },
+    setTraverseHeight(index, mm, groupIndex = 0) {
+      const n = Math.max(0, Math.floor(Number(mm) || 0));
+      const count = this.traverses.count;
+      const g =
+        this.traverses.groups[groupIndex] ||
+        (this.traverses.groups[groupIndex] = {
+          type: this.traverses.type,
+          count,
+          heights: [],
+        });
+      while (g.heights.length < count) g.heights.push(0);
+      if (index >= 0 && index < count) g.heights[index] = n;
+      if (this.traverses.sameForAllLeaves) {
+        for (let gi = 1; gi < this.traverses.groups.length; gi++) {
+          const gg =
+            this.traverses.groups[gi] ||
+            (this.traverses.groups[gi] = {
+              type: this.traverses.type,
+              count,
+              heights: [],
+            });
+          while (gg.heights.length < count) gg.heights.push(0);
+          gg.heights[index] = n;
+        }
+      }
+    },
+    resetTraverseHeights(groupIndex = 0) {
+      const n = this.traverses.count;
+      const g =
+        this.traverses.groups[groupIndex] ||
+        (this.traverses.groups[groupIndex] = {
+          type: this.traverses.type,
+          count: n,
+          heights: [],
+        });
+      g.heights = Array.from({ length: n }, () => 0);
+      if (this.traverses.sameForAllLeaves) {
+        for (let gi = 1; gi < this.traverses.groups.length; gi++) {
+          const gg =
+            this.traverses.groups[gi] ||
+            (this.traverses.groups[gi] = {
+              type: this.traverses.type,
+              count: n,
+              heights: [],
+            });
+          gg.heights = Array.from({ length: n }, () => 0);
+        }
+      }
+    },
+    toggleSameTraverses(v) {
+      this.traverses.sameForAllLeaves = !!v;
+    },
   },
 });

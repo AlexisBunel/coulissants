@@ -5,7 +5,7 @@
   <main id="canvas-wrapper">
     <div id="sticky-container">
       <section id="three-canvas">
-        <canvas id="canvas"></canvas>
+        <Canvas3D />
       </section>
       <section id="forms">
         <ProjectForm />
@@ -13,12 +13,15 @@
         <RailForm />
         <PoigneeForm />
         <DimensionsForm />
-        <!-- <TraversesForm />
-        <FreinForm />
+        <TraversesForm />
+        <!-- <FreinForm />
         <RemplissageForm /> -->
       </section>
     </div>
-    <!-- <Recap /> -->
+    <section id="recapitulatif" role="complementary">
+      <h2>RÉCAPITULATIFS</h2>
+      <ProfilesTable />
+    </section>
   </main>
 </template>
 
@@ -28,8 +31,9 @@ import GammeForm from "./components/forms/GammeForm.vue";
 import RailForm from "./components/forms/RailForm.vue";
 import PoigneeForm from "./components/forms/PoigneeForm.vue";
 import DimensionsForm from "./components/forms/DimensionsForm.vue";
-// import TraversesForm from "./components/TraversesForm.vue";
+import TraversesForm from "./components/forms/TraversesForm.vue";
 // import FreinForm from "./components/FreinForm.vue";
-// import Recap from "./components/Recap.vue";
 // import RemplissageForm from "./components/RemplissageForm.vue";
+import ProfilesTable from "./components/summaries/ProfilesTable.vue";
+import Canvas3D from "./components/Canvas3D.vue";
 </script>

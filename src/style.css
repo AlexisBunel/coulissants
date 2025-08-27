@@ -336,21 +336,38 @@ input[type="checkbox"] {
   gap: 60px;
 }
 
-.poignee-preview {
+/* .poignee-preview {
   position: relative;
   align-self: center;
   width: 200px;
   height: 200px;
   justify-content: center;
   align-items: center;
-}
+} */
 
-.poignee-preview img {
+/* .poignee-preview img {
   width: 100%;
   height: auto;
   transform: scale(3.5);
   transform-origin: center 120px;
   z-index: 0;
+} */
+
+.poignee-preview {
+  position: relative;
+  align-self: center;
+  width: 200px;
+  height: 200px;
+  display: flex; /* pour bien centrer */
+  justify-content: center;
+  align-items: center;
+}
+
+.poignee-preview img {
+  width: 350%;
+  height: auto;
+  object-fit: cover;
+  object-position: center 90%; /* ajuste le centrage vertical */
 }
 
 .poignee-preview.visible {

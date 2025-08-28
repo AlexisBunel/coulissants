@@ -10,7 +10,7 @@ html {
 
 body {
   /* background-color: #f2f1f6; */
-  background-color: #f3f3f3;
+  background-color: #f5f5f5;
   border-radius: 30px;
   box-shadow: 0 0 20px rgba(40, 40, 40, 0.2);
   margin: 20px;
@@ -45,6 +45,10 @@ input {
   padding: 5px;
   width: 40%;
   z-index: 1;
+}
+
+input[type="text"] {
+  padding: 10px;
 }
 
 label {

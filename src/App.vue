@@ -14,8 +14,8 @@
         <PoigneeForm />
         <DimensionsForm />
         <TraversesForm />
-        <!-- <FreinForm />
-        <RemplissageForm /> -->
+        <FreinForm />
+        <RemplissageForm />
       </section>
     </div>
     <section id="recapitulatif" role="complementary">
@@ -32,8 +32,8 @@ import RailForm from "./components/forms/RailForm.vue";
 import PoigneeForm from "./components/forms/PoigneeForm.vue";
 import DimensionsForm from "./components/forms/DimensionsForm.vue";
 import TraversesForm from "./components/forms/TraversesForm.vue";
-// import FreinForm from "./components/FreinForm.vue";
-// import RemplissageForm from "./components/RemplissageForm.vue";
+import FreinForm from "./components/forms/FreinForm.vue";
+import RemplissageForm from "./components/forms/RemplissageForm.vue";
 import ProfilesTable from "./components/summaries/ProfilesTable.vue";
 import Canvas3D from "./components/Canvas3D.vue";
 </script>

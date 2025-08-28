@@ -80,9 +80,9 @@ export const useConfigStore = defineStore("config", {
       freco: 0, // freins éco
     },
     filling: "standard", // 'standard', 'verre'
-    colorBrushes: "",
-    colorSeal: "",
-    colorPGlass: "",
+    colorBrushes: "Noir",
+    colorSeal: "Noir",
+    colorPGlass: "Translucide",
   }),
 
   /**

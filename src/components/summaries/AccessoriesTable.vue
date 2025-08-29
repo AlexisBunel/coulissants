@@ -4,26 +4,26 @@ const d = useDerivedStore();
 </script>
 
 <template>
-  <table id="profiles">
+  <table id="accessories">
     <caption>
-      Profils
+      Accessoires
     </caption>
     <thead>
       <tr>
         <th>Référence</th>
         <th>Désignation</th>
         <th>Finition</th>
-        <th>Quantité</th>
+        <th>Qté</th>
         <th>Longueur</th>
       </tr>
     </thead>
     <tbody>
       <tr v-for="row in d.profiles" :key="row.ref + '-' + row.length">
-        <td>{{ row.ref }}</td>
-        <td>{{ row.description }}</td>
-        <td>{{ row.finishLabel || row.finishCode || "—" }}</td>
-        <td class="num">{{ row.qty }}</td>
-        <td class="num">{{ row.length }} mm</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
       </tr>
     </tbody>
   </table>

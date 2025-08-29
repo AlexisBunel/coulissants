@@ -1,18 +1,26 @@
 // src/calculators/ProfilesCalculator.js
 import { profils } from "../data/profiles";
 import { FINISH_LABEL } from "../data/finishes";
+import { FillingsCalculator } from "./FillingsCalculator";
 
 export const ProfilesCalculator = {
   calculate(cfg = {}) {
     const range = (cfg.range || "").toString().toUpperCase();
     const railType = cfg.rail === "simple" ? "simple" : "double";
-    const handleRef = cfg.handle;
-    const arrangement = cfg.arrangement;
     const W = Math.max(0, Math.floor(Number(cfg.width) || 0));
     const H = Math.max(0, Math.floor(Number(cfg.height) || 0));
     const leaves = Math.max(1, Math.floor(Number(cfg.leavesCount) || 1));
     const finishCode = (cfg.finishCode || "").toString();
     const finishLabel = FINISH_LABEL[finishCode] || finishCode || "";
+
+    const fillingWidth = FillingsCalculator.calculateWidth({
+      range,
+      rail: railType,
+      arrangement: cfg.arrangement,
+      width: W,
+      leavesCount: cfg.leavesCount,
+      handle: cfg.handle,
+    });
 
     const rails = calcRails({
       range,
@@ -26,19 +34,11 @@ export const ProfilesCalculator = {
       range,
       leaves,
       H,
-      handleRef,
+      handleRef: cfg.handle,
       finishCode,
       finishLabel,
     });
-    const corners = calcCorners({
-      handleRef,
-      railType,
-      arrangement,
-      leaves,
-      W,
-      finishCode,
-      finishLabel,
-    });
+    const corners = calcCorners({ range, W, finishCode, finishLabel });
     const topBottomTraverses = calcTopBottomTraverses({
       range,
       W,
@@ -71,6 +71,7 @@ export const ProfilesCalculator = {
       topBottomTraverses,
       intermediateTraverses,
       all,
+      fillingWidth,
     };
   },
 };
@@ -111,7 +112,10 @@ function tickFromConfig(cfg) {
 function calcRails({ range, railType, W, leaves, finishCode, finishLabel }) {
   const { topRef, bottomRef } = pickRailRefs(range, railType);
 
-  const railLength = railType === "simple" ? W * Number(leaves) * 2 : W;
+  // Monorail (simple) : longueur = W * leavesCount * 2 (Haut + Bas)
+  // Double rail : longueur = W (Haut + Bas ont chacun la largeur totale)
+  const leafCount = Math.max(1, Number(leaves) || 1);
+  const railLength = railType === "simple" ? W * leafCount * 2 : W;
 
   return [
     makeRow({
@@ -148,9 +152,17 @@ function pickRailRefs(range, railType) {
 /* ------------------------------ Poignées ------------------------------ */
 
 function calcHandles({ range, leaves, H, handleRef, finishCode, finishLabel }) {
+  // Si une référence de poignée est fournie et existe, on la prend. Sinon, on essaie une poignée par défaut de la gamme.
   let ref = handleRef && findProfileMeta(handleRef) ? handleRef : null;
 
-  if (!findProfileMeta(ref)) return [];
+  // if (!ref) {
+  //   // fallback simple : choisir une poignée “courante” par gamme
+  //   if (range === "82") ref = "P100";
+  //   else if (range === "96") ref = "P300-19";
+  //   else if (range === "96CA") ref = "P810";
+  // }
+
+  if (!findProfileMeta(ref)) return []; // aucune poignée connue
 
   const pLength = range === "96CA" ? H - 54 : H - 50;
   return [
@@ -166,49 +178,18 @@ function calcHandles({ range, leaves, H, handleRef, finishCode, finishLabel }) {
 }
 
 /* ------------------------------ Cornières ------------------------------ */
-function getVariablesFromProfiles(handleRef) {
-  const meta = profils.find((p) => p.reference === handleRef);
-  // y, z peuvent être non définis (ou string); on sécurise
-  const y = Number(meta?.y) || 0;
-  const z = Number(meta?.z) || 0;
-  const c = Number(meta?.c) || 0;
-  return { y, z, c, found: !!meta };
-}
 
-function calcCorners({
-  handleRef,
-  railType,
-  arrangement,
-  leaves,
-  W,
-  finishCode,
-  finishLabel,
-}) {
+function calcCorners({ range, W, finishCode, finishLabel }) {
+  // DB dispo : CCLA (cornière basse) pour 82/96/96CA
+  // Hypothèse raisonnable : 1 cornière basse de la largeur totale
+  if (!["82", "96", "96CA"].includes(range)) return [];
   if (!findProfileMeta("CCLA")) return [];
-
-  const { y, z, c } = getVariablesFromProfiles(handleRef);
-
-  const fillingWidth = () => {
-    if (railType === "double") {
-      if (arrangement === "centre") {
-        return Math.max(0, Math.floor((W - 4 * z + y * 2) / 4));
-      }
-
-      return Math.max(0, Math.floor((W - 2 * z + y * (leaves - 1)) / leaves));
-    }
-
-    return Math.max(0, Math.floor(W - 2 * z));
-  };
-
-  console.log(fillingWidth);
-
-  const length = fillingWidth() - 2 * c;
 
   return [
     makeRow({
       ref: "CCLA",
       fallbackLabel: "Cornière basse",
-      length: length,
+      length: W,
       qty: 1,
       finishCode,
       finishLabel,

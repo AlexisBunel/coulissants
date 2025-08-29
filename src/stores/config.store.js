@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { ProfilesCalculator } from "../calculators/ProfilesCalculator";
 
 const TICKS_BY_RANGE = {
   96: ["16", "19"],
@@ -89,6 +90,26 @@ export const useConfigStore = defineStore("config", {
    * Recalcul un formulaire lorsqu'un un autre formulaire change
    */
   getters: {
+    geometry: (s) => ({
+      width: Number(s.width) || 0,
+      height: Number(s.height) || 0,
+      rail: s.rail,
+      leavesCount: Number(s.leavesCount) || 1,
+    }),
+
+    profiles: (s) =>
+      ProfilesCalculator.calculate({
+        range: s.range,
+        rail: s.rail,
+        handle: s.handle,
+        width: Number(s.width) || 0,
+        height: Number(s.height) || 0,
+        leavesCount: Number(s.leavesCount) || 1,
+        arrangement: s.arrangement,
+        traverses: s.traverses,
+        finishCode: s.colorProfiles,
+      }),
+
     showRailsForm: (state) => state.range !== "82",
 
     tickOptions: (s) => {

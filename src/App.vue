@@ -21,6 +21,8 @@
     <section id="recapitulatif" role="complementary">
       <h2>RÉCAPITULATIFS</h2>
       <ProfilesTable />
+      <AccessoriesTable />
+      <FillingsTable />
     </section>
   </main>
 </template>
@@ -35,5 +37,7 @@ import TraversesForm from "./components/forms/TraversesForm.vue";
 import FreinForm from "./components/forms/FreinForm.vue";
 import RemplissageForm from "./components/forms/RemplissageForm.vue";
 import ProfilesTable from "./components/summaries/ProfilesTable.vue";
+import AccessoriesTable from "./components/summaries/AccessoriesTable.vue";
+import FillingsTable from "./components/summaries/FillingsTable.vue";
 import Canvas3D from "./components/Canvas3D.vue";
 </script>

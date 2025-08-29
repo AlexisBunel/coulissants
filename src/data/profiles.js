@@ -62,7 +62,7 @@ export const profils = [
     t: 61,
   },
   {
-    reference: "P300",
+    reference: "P300-19",
     type: "poignee",
     designation: "Poignée P300",
     gammes: ["96"],

@@ -1,4 +1,3 @@
-// src/calculators/ProfilesCalculator.js
 import { profils } from "../data/profiles";
 import { FINISH_LABEL } from "../data/finishes";
 
@@ -381,6 +380,7 @@ function calcIntermediateTraverses({
         qty: data.qty,
         finishCode,
         finishLabel,
+        tick,
       })
     );
   }

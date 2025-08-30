@@ -14,6 +14,16 @@ const totalVantaux = computed(() =>
   Math.max(1, Number(config.leavesCount || 1))
 );
 
+function setGlobalTraverseType(val) {
+  const t = String(val || "");
+  config.traverses.type = t;
+  ensureGroups();
+  // impose le même type pour tous les groupes
+  for (let i = 0; i < config.traverses.groups.length; i++) {
+    config.traverses.groups[i].type = t;
+  }
+}
+
 function ensureGroups() {
   const n = totalVantaux.value;
   const groups = config.traverses.groups || (config.traverses.groups = []);
@@ -27,11 +37,17 @@ function ensureGroups() {
   }
   if (groups.length > n) groups.splice(n);
 
-  // Si "identiques", on recopie le groupe 0 vers les suivants pour rester cohérent
+  // 🔒 le type est global : on impose le même partout
+  const globalType =
+    config.traverses.type || (traverseTypeOptions.value[0]?.value ?? "");
+  for (let i = 0; i < groups.length; i++) {
+    groups[i].type = globalType;
+  }
+
+  // Si "identiques", on ne copie que count+heights (PAS le type, car global)
   if (config.traverses.sameForAllLeaves && groups[0]) {
     const g0 = groups[0];
     for (let i = 1; i < groups.length; i++) {
-      groups[i].type = g0.type;
       groups[i].count = g0.count;
       groups[i].heights = g0.heights.slice();
     }
@@ -57,11 +73,9 @@ const vantauxIdentiques = computed({
     config.traverses.sameForAllLeaves = !!v;
     ensureGroups();
     if (v) {
-      // copie immédiate du groupe 0 vers les autres
       const g0 = config.traverses.groups[0];
       for (let i = 1; i < config.traverses.groups.length; i++) {
         const gi = config.traverses.groups[i];
-        gi.type = g0.type;
         gi.count = g0.count;
         gi.heights = g0.heights.slice();
       }
@@ -90,15 +104,8 @@ const selectedTraverseType = computed({
   get: () =>
     config.traverses?.type ?? traverseTypeOptions.value[0]?.value ?? "",
   set: (v) => {
-    const val = String(v);
-    config.traverses.type = val;
-    ensureGroups();
-    if (config.traverses.groups[0]) config.traverses.groups[0].type = val;
-    if (config.traverses.sameForAllLeaves) {
-      for (let i = 1; i < config.traverses.groups.length; i++) {
-        config.traverses.groups[i].type = val;
-      }
-    }
+    setGlobalTraverseType(v);
+    syncOpenState();
   },
 });
 
@@ -120,7 +127,6 @@ watch(totalVantaux, () => {
     const g0 = config.traverses.groups[0];
     for (let i = 1; i < config.traverses.groups.length; i++) {
       const gi = config.traverses.groups[i];
-      gi.type = g0.type;
       gi.count = g0.count;
       gi.heights = g0.heights.slice();
     }
@@ -145,7 +151,6 @@ function setGroupCount(i, count) {
     for (let k = 1; k < config.traverses.groups.length; k++) {
       config.traverses.groups[k].count = n;
       config.traverses.groups[k].heights = g.heights.slice();
-      config.traverses.groups[k].type = g.type;
     }
   }
 }
@@ -213,7 +218,6 @@ function generateDefaultHauteurs(i) {
         for (let k = 1; k < config.traverses.groups.length; k++) {
           config.traverses.groups[k].count = 0;
           config.traverses.groups[k].heights = [];
-          config.traverses.groups[k].type = g.type;
         }
       }
       return;

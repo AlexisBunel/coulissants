@@ -66,7 +66,6 @@ export const useConfigStore = defineStore("config", {
     colorProfiles: "SA",
     traverses: {
       groups: [
-        // groupe 0 (vantail 1)
         {
           type: "28", // '7', '25', '28' ou '37',
           count: 0, // nombre de traverses par vantail (0 au départ),
@@ -86,9 +85,6 @@ export const useConfigStore = defineStore("config", {
     colorPGlass: "Translucide",
   }),
 
-  /**
-   * Recalcul un formulaire lorsqu'un un autre formulaire change
-   */
   getters: {
     geometry: (s) => ({
       width: Number(s.width) || 0,

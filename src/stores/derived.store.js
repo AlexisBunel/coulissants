@@ -2,6 +2,7 @@ import { defineStore, storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useConfigStore } from "./config.store";
 import { ProfilesCalculator } from "../calculators/ProfilesCalculator";
+import { FillingsCalculator } from "../calculators/FillingsCalculator";
 import { FINISH_LABEL } from "../data/finishes";
 
 export const useDerivedStore = defineStore("derived", () => {
@@ -133,6 +134,53 @@ export const useDerivedStore = defineStore("derived", () => {
     };
   });
 
+  // ---------- 3) Remplissages (hauteurs/largeur) ----------
+  // heightsByLeaf = { '1':[...], ... } depuis la config (comme Leaves ci-dessus)
+  const heightsByLeaf = computed(() => {
+    const n = Math.max(1, Number(leavesCount.value) || 1);
+    const same = !!traverses.value?.sameForAllLeaves;
+    const groups = Array.isArray(traverses.value?.groups)
+      ? traverses.value.groups
+      : [];
+    const out = {};
+    for (let i = 0; i < n; i++) {
+      const g = same ? groups[0] : groups[i];
+      out[String(i + 1)] = Array.isArray(g?.heights) ? g.heights.slice() : [];
+    }
+    return out;
+  });
+
+  // Déduction de la ref TI (utile pour 96CA afin de choisir TI28 ou TI37)
+  const traverseRef = computed(() => {
+    const r = String(range.value || "").toUpperCase();
+    if (r === "96CA") {
+      const groups = Array.isArray(traverses.value?.groups)
+        ? traverses.value.groups
+        : [];
+      const ty = String(traverses.value?.type ?? groups?.[0]?.type ?? "");
+      if (ty === "28") return "TI28";
+      if (ty === "37") return "TI37";
+      return "TI28"; // fallback raisonnable si non précisé
+    }
+    // 96 : non nécessaire pour les formules, mais on peut refléter le tick
+    const t = String(tick?.value ?? "").replace(/\s/g, "");
+    if (t === "16") return "TI16";
+    if (t === "19") return "TI19";
+    return "";
+  });
+
+  const fillings = computed(() =>
+    FillingsCalculator.compute({
+      range: String(range.value),
+      height: Number(height.value) || 0,
+      fillingWidth: Number(raw.value?.meta?.fillingWidth) || 0, // largeur utile par vantail  :contentReference[oaicite:4]{index=4}
+      traverseRef: traverseRef.value,
+      tick: String(tick?.value ?? ""),
+      leavesCount: Number(leavesCount.value) || 1,
+      heightsByLeaf: heightsByLeaf.value, // centres des TI par vantail (depuis config)  :contentReference[oaicite:5]{index=5}
+    })
+  );
+
   // Données géométriques utiles 3D
   const geometry = computed(() => ({
     width: Number(width.value) || 0,
@@ -141,5 +189,5 @@ export const useDerivedStore = defineStore("derived", () => {
     leavesCount: Math.max(1, Number(leavesCount.value) || 1),
   }));
 
-  return { raw, profils, geometry };
+  return { raw, profils, fillings, geometry };
 });

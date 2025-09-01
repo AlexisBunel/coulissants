@@ -41,6 +41,8 @@ const freco = computed({
 // --- ECO visible uniquement en 82 ---
 const showFreco = computed(() => String(config.range) === "82");
 
+const showFrlamelle = computed(() => String(config.range) !== "96CA");
+
 // --- Valeurs par défaut = nb de vantaux selon la gamme ---
 watch(
   [() => String(config.range), () => Number(config.leavesCount || 1)],
@@ -62,6 +64,10 @@ watch(
       config.absorber.frlamelle = n;
     } else {
       config.absorber.fram = 0;
+    }
+
+    if (rangeStr === "96CA") {
+      config.absorber.frlamelle = 0;
     }
 
     // Sécu clamp
@@ -90,7 +96,7 @@ watch(
     </div>
 
     <form class="form-content" id="frein-form">
-      <label>
+      <label v-if="showFrlamelle">
         Nombre de freins à lamelle :
         <input type="number" min="0" step="1" v-model.number="frlamelle" />
       </label>

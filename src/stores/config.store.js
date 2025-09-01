@@ -86,25 +86,25 @@ export const useConfigStore = defineStore("config", {
   }),
 
   getters: {
-    geometry: (s) => ({
-      width: Number(s.width) || 0,
-      height: Number(s.height) || 0,
-      rail: s.rail,
-      leavesCount: Number(s.leavesCount) || 1,
-    }),
+    // geometry: (s) => ({
+    //   width: Number(s.width) || 0,
+    //   height: Number(s.height) || 0,
+    //   rail: s.rail,
+    //   leavesCount: Number(s.leavesCount) || 1,
+    // }),
 
-    profiles: (s) =>
-      ProfilesCalculator.calculate({
-        range: s.range,
-        rail: s.rail,
-        handle: s.handle,
-        width: Number(s.width) || 0,
-        height: Number(s.height) || 0,
-        leavesCount: Number(s.leavesCount) || 1,
-        arrangement: s.arrangement,
-        traverses: s.traverses,
-        finishCode: s.colorProfiles,
-      }),
+    // profiles: (s) =>
+    //   ProfilesCalculator.calculate({
+    //     range: s.range,
+    //     rail: s.rail,
+    //     handle: s.handle,
+    //     width: Number(s.width) || 0,
+    //     height: Number(s.height) || 0,
+    //     leavesCount: Number(s.leavesCount) || 1,
+    //     arrangement: s.arrangement,
+    //     traverses: s.traverses,
+    //     finishCode: s.colorProfiles,
+    //   }),
 
     showRailsForm: (state) => state.range !== "82",
 
@@ -171,6 +171,7 @@ export const useConfigStore = defineStore("config", {
     setRange(v) {
       this.range = String(v);
       if (this.range === "82") this.rail = "double";
+      if (this.range === "96CA") this.filling = "verre";
 
       const valid = TICKS_BY_RANGE[this.range] || ["19"];
       if (!valid.includes(this.tick)) this.tick = valid[0];

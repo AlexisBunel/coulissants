@@ -5,71 +5,65 @@ import { profils as profilsDB } from "../../data/profiles";
 
 const d = useDerivedStore();
 
-const rows = computed(() => {
-  const P = d.profils?.Profiles || {};
-  const finish = P.finish || {};
-  const items = [];
-
-  const pushItem = (node, fallbackType) => {
-    if (!node || !node.Ref) return;
-    items.push({
-      ref: node.Ref,
-      description: descFor(node.Ref, fallbackType),
-      finishLabel: finish.label,
-      finishCode: finish.code,
-      qty: node.qty ?? 1,
-      length: node.Length ?? 0,
-    });
-  };
-
-  // Rails haut / bas / poignée
-  pushItem(P.RT, "Rail haut");
-  pushItem(P.RB, "Rail bas");
-  pushItem(P.Handle, "Poignée");
-
-  // TI : qty = nb total de traverses (somme des hauteurs définies sur tous les vantaux)
-  if (P.TI && P.TI.Ref) {
-    const totalHeights = P.TI.Leaves
-      ? Object.values(P.TI.Leaves).reduce(
-          (acc, v) => acc + (Array.isArray(v?.height) ? v.height.length : 0),
-          0
-        )
-      : 0;
-
-    items.push({
-      ref: P.TI.Ref,
-      description: descFor(P.TI.Ref, "Traverse intermédiaire"),
-      finishLabel: finish.label,
-      finishCode: finish.code,
-      qty: totalHeights,
-      length: P.TI.Length ?? 0,
-    });
-  }
-
-  // Traverse haute/basse (96CA) et cornière
-  pushItem(P.THB, "Traverse haute/basse");
-  pushItem(P.Corner, "Cornière basse");
-
-  // On n'affiche que ce qui a une quantité >0 ou une longueur >0
-  return items.filter((r) => (r.qty ?? 0) > 0 || (r.length ?? 0) > 0);
-});
-
 function descFor(ref, fallback) {
   if (!ref) return fallback || "Profil";
   const m = profilsDB.find((p) => p.reference === ref);
-  if (m?.designation) return m.designation;
-  return fallbackFromRef(ref, fallback);
+  return m?.designation || fallback || "Profil";
 }
-function fallbackFromRef(ref, fb) {
-  if (!ref) return fb || "Profil";
-  if (/^RH/.test(ref)) return "Rail haut";
-  if (/^RB/.test(ref)) return "Rail bas";
-  if (/^P/.test(ref)) return "Poignée";
-  if (/^TI/.test(ref)) return "Traverse intermédiaire";
-  if (/^THB/.test(ref)) return "Traverse haute/basse";
-  if (ref === "CCLA") return "Cornière basse";
-  return fb || "Profil";
+
+function makeRow(node, finishCode, finishLabel, fallbackLabel) {
+  if (!node || !node.ref) return null;
+  return {
+    ref: node.ref,
+    description: descFor(node.ref, fallbackLabel),
+    finishCode,
+    finishLabel,
+    qty: node.qty ?? 1,
+    length: node.length ?? 0,
+  };
 }
+
+const rows = computed(() => {
+  const r = d.raw;
+  if (!r) return [];
+
+  // Récupèrer la finition
+  const finishCode = d.profils?.Profiles?.finish?.code || "";
+  const finishLabel = d.profils?.Profiles?.finish?.label || "";
+
+  const items = [];
+
+  // Rails / Poignée
+  items.push(makeRow(r.rails?.top, finishCode, finishLabel, "Rail haut"));
+  items.push(makeRow(r.rails?.bottom, finishCode, finishLabel, "Rail bas"));
+  items.push(makeRow(r.handle, finishCode, finishLabel, "Poignée"));
+
+  // TI intermédiaires
+  items.push(
+    makeRow(
+      r.traverses?.intermediate,
+      finishCode,
+      finishLabel,
+      "Traverse intermédiaire"
+    )
+  );
+
+  // 96CA : TI28 (haut) & THB52 (bas)
+  items.push(
+    makeRow(r.traverses?.top, finishCode, finishLabel, "Traverse haute")
+  );
+  items.push(
+    makeRow(r.traverses?.bottom, finishCode, finishLabel, "Traverse basse")
+  );
+
+  // Cornière
+  items.push(makeRow(r.corner, finishCode, finishLabel, "Cornière basse"));
+
+  // Afficher seulement si qty>0 ou length>0
+  return items
+    .filter(Boolean)
+    .filter((row) => (row.qty ?? 0) > 0 || (row.length ?? 0) > 0);
+});
 </script>
 
 <template>

@@ -1,132 +1,131 @@
 import { profils } from "../data/profiles";
-import { FINISH_LABEL } from "../data/finishes";
 
 export const ProfilesCalculator = {
-  calculate(cfg = {}) {
+  compute(cfg = {}) {
     const range = (cfg.range || "").toString().toUpperCase();
     const railType = cfg.rail === "simple" ? "simple" : "double";
+    const arrangement = (cfg.arrangement || "").toString();
     const handleRef = cfg.handle;
-    const arrangement = cfg.arrangement;
+    const tick = tickFromConfig(cfg);
+
     const W = Math.max(0, Math.floor(Number(cfg.width) || 0));
     const H = Math.max(0, Math.floor(Number(cfg.height) || 0));
     const leaves = Math.max(1, Math.floor(Number(cfg.leavesCount) || 1));
-    const finishCode = (cfg.finishCode || "").toString();
-    const finishLabel = FINISH_LABEL[finishCode] || finishCode || "";
+    const traversesCfg = cfg.traverses || {};
 
-    const rails = calcRails({
-      range,
-      railType,
-      W,
-      leaves,
-      finishCode,
-      finishLabel,
-    });
-    const handles = calcHandles({
-      range,
-      leaves,
-      H,
-      handleRef,
-      finishCode,
-      finishLabel,
-    });
-    const corners = calcCorners({
-      handleRef,
-      railType,
-      range,
-      arrangement,
-      leaves,
-      W,
-      finishCode,
-      finishLabel,
-    });
-    const topTraverses = calcTopTraverses({
-      handleRef,
-      railType,
-      arrangement,
-      range,
-      W,
-      leaves,
-      finishCode,
-      finishLabel,
-    });
-    const bottomTraverses = calcBottomTraverses({
-      handleRef,
-      railType,
-      arrangement,
-      range,
-      W,
-      leaves,
-      finishCode,
-      finishLabel,
-    });
-    const intermediateTraverses = calcIntermediateTraverses({
-      handleRef,
-      railType,
-      arrangement,
-      range,
-      tick: tickFromConfig(cfg),
-      traverses: cfg.traverses,
-      W,
-      leaves,
-      finishCode,
-      finishLabel,
-    });
+    const { y, z, c, t } = getVariablesFromProfiles(handleRef);
 
-    const all = [
-      ...rails,
-      ...handles,
-      ...corners,
-      ...topTraverses,
-      ...bottomTraverses,
-      ...intermediateTraverses,
-    ];
+    const fillingWidth = getFillingWidth(
+      railType,
+      arrangement,
+      W,
+      z,
+      y,
+      leaves
+    );
+
+    /* ------------------------------- Rails top/bottom ------------------------------- */
+    const { topRef, bottomRef } = pickRailRefs(range, railType);
+    const railLength = railType === "simple" ? W * Number(leaves) * 2 : W;
+    const rails = {
+      top: { ref: topRef, length: railLength, qty: 1, role: "rail-top" },
+      bottom: {
+        ref: bottomRef,
+        length: railLength,
+        qty: 1,
+        role: "rail-bottom",
+      },
+    };
+
+    /* ----------------------------------- Handle ----------------------------------- */
+    const handleLength =
+      range === "96CA" ? Math.max(0, H - 54) : Math.max(0, H - 50);
+    const handle = findProfileMeta(handleRef)
+      ? {
+          ref: handleRef,
+          length: handleLength,
+          qty: leaves * 2,
+          role: "handle",
+        }
+      : null;
+
+    /* ----------------------------------- Corner ----------------------------------- */
+    const corner =
+      range === "96CA"
+        ? null
+        : findProfileMeta("CCLA")
+        ? {
+            ref: "CCLA",
+            length: Math.max(0, fillingWidth - 2 * c),
+            qty: leaves,
+            role: "corner",
+          }
+        : null;
+
+    /* -------------------------- Traverses hautes / basses -------------------------- */
+    const traverses = { top: null, bottom: null, intermediate: null };
+
+    if (range === "96CA") {
+      if (findProfileMeta("TI28")) {
+        traverses.top = {
+          ref: "TI28",
+          length: Math.max(0, fillingWidth - t),
+          qty: leaves,
+          role: "traverse-top",
+        };
+      }
+      if (findProfileMeta("THB52")) {
+        traverses.bottom = {
+          ref: "THB52",
+          length: Math.max(0, fillingWidth - t),
+          qty: leaves,
+          role: "traverse-bottom",
+        };
+      }
+    }
+
+    /* ------------------------ Traverses intermédiaires (TI) ------------------------ */
+    const tiRef = refForIntermediate(
+      range,
+      tick,
+      traversesCfg?.groups?.[0]?.type
+    );
+    if (tiRef && findProfileMeta(tiRef)) {
+      const tiQty = computeIntermediateQty(traversesCfg, leaves);
+      const tiLen = Math.max(0, fillingWidth - t);
+      traverses.intermediate =
+        tiQty > 0
+          ? {
+              ref: tiRef,
+              length: tiLen,
+              qty: tiQty,
+              role: "traverse-intermediate",
+            }
+          : null;
+    }
 
     return {
       rails,
-      handles,
-      corners,
-      topTraverses,
-      bottomTraverses,
-      intermediateTraverses,
-      all,
+      handle,
+      corner,
+      traverses,
+      meta: { range, railType, arrangement, leaves, fillingWidth },
     };
   },
 };
 
-/* ------------------------------ Helpers ------------------------------ */
+/* -------------------------------- Helpers -------------------------------- */
 
 function findProfileMeta(ref) {
   return profils.find((p) => p.reference === ref);
 }
 
-function makeRow({
-  ref,
-  fallbackLabel,
-  length = 0,
-  qty = 1,
-  finishCode = "",
-  finishLabel = "",
-}) {
-  const meta = findProfileMeta(ref);
-  const description = meta?.designation || fallbackLabel || "Profil";
-  return {
-    ref,
-    description,
-    length: Math.max(0, Math.floor(Number(length) || 0)),
-    qty: Math.max(0, Math.floor(Number(qty) || 0)),
-    finishCode,
-    finishLabel,
-  };
-}
-
 function tickFromConfig(cfg) {
-  // '16' | '19' | '6-8' | '12' ...
   return (cfg.tick || cfg.t || "").toString();
 }
 
 function getVariablesFromProfiles(handleRef) {
   const meta = profils.find((p) => p.reference === handleRef);
-  // y, z peuvent être non définis (ou string); on sécurise
   const y = Number(meta?.y) || 0;
   const z = Number(meta?.z) || 0;
   const c = Number(meta?.c) || 0;
@@ -139,38 +138,9 @@ function getFillingWidth(railType, arrangement, W, z, y, leaves) {
     if (arrangement === "centre") {
       return Math.max(0, Math.floor((W - 4 * z + y * 2) / 4));
     }
-
     return Math.max(0, Math.floor((W - 2 * z + y * (leaves - 1)) / leaves));
   }
-
   return Math.max(0, Math.floor(W - 2 * z));
-}
-
-/* ------------------------------ Rails ------------------------------ */
-
-function calcRails({ range, railType, W, leaves, finishCode, finishLabel }) {
-  const { topRef, bottomRef } = pickRailRefs(range, railType);
-
-  const railLength = railType === "simple" ? W * Number(leaves) * 2 : W;
-
-  return [
-    makeRow({
-      ref: topRef,
-      fallbackLabel: "Rail haut",
-      length: railLength,
-      qty: 1,
-      finishCode,
-      finishLabel,
-    }),
-    makeRow({
-      ref: bottomRef,
-      fallbackLabel: "Rail bas",
-      length: railLength,
-      qty: 1,
-      finishCode,
-      finishLabel,
-    }),
-  ];
 }
 
 function pickRailRefs(range, railType) {
@@ -181,208 +151,38 @@ function pickRailRefs(range, railType) {
     if (railType === "double") return { topRef: "RH96", bottomRef: "RB65" };
     return { topRef: "RH50", bottomRef: "RB48" };
   }
-
   return { topRef: "RH96", bottomRef: "RB65" };
 }
 
-/* ------------------------------ Poignées ------------------------------ */
-
-function calcHandles({ range, leaves, H, handleRef, finishCode, finishLabel }) {
-  let ref = handleRef && findProfileMeta(handleRef) ? handleRef : null;
-
-  if (!findProfileMeta(ref)) return [];
-
-  const pLength = range === "96CA" ? H - 54 : H - 50;
-  return [
-    makeRow({
-      ref,
-      fallbackLabel: "Poignée",
-      qty: leaves * 2, // 1 poignée par vantail
-      length: pLength, // pas de longueur utile
-      finishCode,
-      finishLabel,
-    }),
-  ];
-}
-
-/* ------------------------------ Cornières ------------------------------ */
-
-function calcCorners({
-  handleRef,
-  railType,
-  range,
-  arrangement,
-  leaves,
-  W,
-  finishCode,
-  finishLabel,
-}) {
-  if (!findProfileMeta("CCLA")) return [];
-  if (range === "96CA") return [];
-
-  const { y, z, c } = getVariablesFromProfiles(handleRef);
-  const fillingWidth = getFillingWidth(railType, arrangement, W, z, y, leaves);
-
-  const length = fillingWidth - 2 * c;
-  const quantity = leaves;
-
-  return [
-    makeRow({
-      ref: "CCLA",
-      fallbackLabel: "Cornière basse",
-      length: length,
-      qty: quantity,
-      finishCode,
-      finishLabel,
-    }),
-  ];
-}
-
-/* ------------------------ Traverses hautes / basses ------------------------ */
-
-function calcTopTraverses({
-  handleRef,
-  railType,
-  arrangement,
-  range,
-  W,
-  leaves,
-  finishCode,
-  finishLabel,
-}) {
-  if (range !== "96CA") return [];
-
-  const meta = findProfileMeta("TI28");
-  if (!meta) return [];
-
-  const { y, z, c, t } = getVariablesFromProfiles(handleRef);
-  const fillingWidth = getFillingWidth(railType, arrangement, W, z, y, leaves);
-  const length = fillingWidth - t;
-  const qty = 1 * leaves;
-
-  return [
-    makeRow({
-      ref: "TI28",
-      fallbackLabel: "Traverse intermédiaire 28",
-      length: length,
-      qty,
-      finishCode,
-      finishLabel,
-    }),
-  ];
-}
-
-function calcBottomTraverses({
-  handleRef,
-  railType,
-  arrangement,
-  range,
-  W,
-  leaves,
-  finishCode,
-  finishLabel,
-}) {
-  if (range !== "96CA") return [];
-
-  const meta = findProfileMeta("THB52");
-  if (!meta) return [];
-
-  const { y, z, c, t } = getVariablesFromProfiles(handleRef);
-  const fillingWidth = getFillingWidth(railType, arrangement, W, z, y, leaves);
-  const length = fillingWidth - t;
-  const qty = 1 * leaves;
-
-  return [
-    makeRow({
-      ref: "THB52",
-      fallbackLabel: "Traverse haute/basse 52",
-      length: length,
-      qty,
-      finishCode,
-      finishLabel,
-    }),
-  ];
-}
-
-/* -------------------------- Traverses intermédiaires -------------------------- */
-
-function calcIntermediateTraverses({
-  handleRef,
-  railType,
-  arrangement,
-  range,
-  tick,
-  traverses,
-  W,
-  leaves,
-  finishCode,
-  finishLabel,
-}) {
-  const refFor = (type) => {
-    if (range === "96") {
-      const t = tick.replace(/\s/g, "");
-      if (t === "16") return "TI16";
-      if (t === "19") return "TI19";
-      return "TI19";
-    }
-    if (range === "96CA") {
-      if (String(type) === "28") return "TI28";
-      if (String(type) === "37") return "TI37";
-      return null;
-    }
+function refForIntermediate(range, tick, groupType) {
+  const r = (range || "").toString().toUpperCase();
+  if (r === "96") {
+    const t = (tick || "").replace(/\s/g, "");
+    if (t === "16") return "TI16";
+    if (t === "19") return "TI19";
+    return "TI19";
+  }
+  if (r === "96CA") {
+    const ty = (groupType || "").toString();
+    if (ty === "28") return "TI28";
+    if (ty === "37") return "TI37";
     return null;
-  };
+  }
+  return null;
+}
 
+function computeIntermediateQty(traverses, leaves) {
   const groups = Array.isArray(traverses?.groups) ? traverses.groups : [];
-  if (!groups.length) return [];
-
-  // Longueur d’une traverse intermédiaire : hypothèse = largeur par vantail
-  const { y, z, c, t } = getVariablesFromProfiles(handleRef);
-  const fillingWidth = getFillingWidth(railType, arrangement, W, z, y, leaves);
-  const tLength = fillingWidth - t;
-
-  // Quantités :
-  // - si sameForAllLeaves : on prend le groupe 0 et on multiplie par le nombre de vantaux
-  // - sinon : on additionne les counts de chaque groupe (déjà “par vantail”)
-  let totalByRef = new Map(); // ref -> { qty, length }
-
-  const addQty = (ref, qty) => {
-    if (!ref || qty <= 0) return;
-    const prev = totalByRef.get(ref) || { qty: 0, length: tLength };
-    prev.qty += qty;
-    totalByRef.set(ref, prev);
-  };
-
+  if (!groups.length) return 0;
   const same = !!traverses?.sameForAllLeaves;
 
   if (same) {
-    const g0 = groups[0] || { type: null, count: 0 };
-    const ref = refFor(g0.type);
-    addQty(ref, Math.max(0, g0.count) * leaves);
-  } else {
-    for (const g of groups) {
-      const ref = refFor(g.type);
-      addQty(ref, Math.max(0, Number(g.count) || 0));
-    }
-  }
-
-  // Générer les lignes
-  const rows = [];
-  for (const [ref, data] of totalByRef.entries()) {
-    if (!ref) continue;
-    if (!findProfileMeta(ref)) continue;
-
-    rows.push(
-      makeRow({
-        ref,
-        fallbackLabel: "Traverse intermédiaire",
-        length: data.length,
-        qty: data.qty,
-        finishCode,
-        finishLabel,
-        tick,
-      })
+    const g0 = groups[0] || { count: 0 };
+    return (
+      Math.max(0, Number(g0.count) || 0) * Math.max(1, Number(leaves) || 1)
     );
   }
-  return rows;
+  let sum = 0;
+  for (const g of groups) sum += Math.max(0, Number(g?.count) || 0);
+  return sum;
 }

@@ -1,4 +1,3 @@
-// src/stores/derived.store.js
 import { defineStore, storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useConfigStore } from "./config.store";
@@ -20,9 +19,8 @@ export const useDerivedStore = defineStore("derived", () => {
     handle,
   } = storeToRefs(config);
 
-  // --- Helpers ----------------------------
-  function rowsFromCalc() {
-    const res = ProfilesCalculator.calculate({
+  const raw = computed(() =>
+    ProfilesCalculator.compute({
       range: String(range.value),
       rail: String(rail.value),
       width: Number(width.value) || 0,
@@ -30,84 +28,112 @@ export const useDerivedStore = defineStore("derived", () => {
       leavesCount: Number(leavesCount.value) || 1,
       arrangement: String(arrangement.value || ""),
       traverses: traverses.value,
-      finishCode: String(colorProfiles.value || ""),
       tick: String(tick?.value ?? ""),
       handle: String(handle?.value ?? ""),
-    });
-    if (Array.isArray(res)) return res; // ancien calc: tableau direct
-    return Array.isArray(res?.all) ? res.all : []; // nouveau calc: objet { all, ... }
-  }
+    })
+  ); // -> { rails:{top,bottom}, handle, corner, traverses:{top,bottom,intermediate}, meta:{...} }
 
-  function shapeProfiles(rows) {
-    const find = (rx) => rows.find((r) => rx.test(String(r?.ref || "")));
-
-    const rt = find(/^RH/);
-    const rb = find(/^RB/);
-    const hd = find(/^P/);
-    const ti = find(/^TI/);
-    const thb = find(/^THB/);
-    const ccla = find(/^CCLA/);
-
-    // Finish
+  const profils = computed(() => {
+    const r = raw.value;
     const finishCode = String(colorProfiles.value || "");
-    const finishLabel =
-      FINISH_LABEL[finishCode] || rows[0]?.finishLabel || finishCode;
+    const finishLabel = FINISH_LABEL[finishCode] || finishCode;
 
-    // Leaves -> heights depuis config.traverses.groups
-    const n = Math.max(1, Number(leavesCount.value) || 1);
+    // Rails
+    const RT = r?.rails?.top
+      ? {
+          Ref: r.rails.top.ref,
+          Length: r.rails.top.length,
+          qty: r.rails.top.qty,
+        }
+      : { Ref: null, Length: 0, qty: 0 };
+
+    const RB = r?.rails?.bottom
+      ? {
+          Ref: r.rails.bottom.ref,
+          Length: r.rails.bottom.length,
+          qty: r.rails.bottom.qty,
+        }
+      : { Ref: null, Length: 0, qty: 0 };
+
+    // Poignée
+    const nLeaves = Math.max(1, Number(leavesCount.value) || 1);
+    const Handle = r?.handle
+      ? {
+          Ref: r.handle.ref,
+          Length: r.handle.length ?? 0,
+          qty: r.handle.qty ?? nLeaves,
+        }
+      : { Ref: String(handle.value || ""), Length: 0, qty: nLeaves };
+
+    // Vantaux (heights) recopiés depuis la config
     const same = !!traverses.value?.sameForAllLeaves;
     const groups = Array.isArray(traverses.value?.groups)
       ? traverses.value.groups
       : [];
-    const leaves = {};
-    for (let i = 0; i < n; i++) {
+    const Leaves = {};
+    for (let i = 0; i < nLeaves; i++) {
       const g = same ? groups[0] : groups[i];
-      leaves[String(i + 1)] = {
+      Leaves[String(i + 1)] = {
         height: Array.isArray(g?.heights) ? g.heights.slice() : [],
       };
     }
 
-    // 👉 Type global des traverses intermédiaires (sécurisé)
+    // Type global des traverses intermédiaires
     const traverseType =
       String(traverses.value?.type ?? groups?.[0]?.type ?? "") || null;
 
+    // TI
+    const TI = r?.traverses?.intermediate
+      ? {
+          Ref: r.traverses.intermediate.ref,
+          Length: r.traverses.intermediate.length ?? 0,
+          Type: traverseType,
+          Leaves,
+        }
+      : { Ref: null, Length: 0, Type: traverseType, Leaves };
+
+    // TH
+    const TH = r?.traverses?.top
+      ? {
+          Ref: r.traverses.top.ref,
+          Length: r.traverses.top.length ?? 0,
+          qty: r.traverses.top.qty ?? 0,
+        }
+      : { Ref: null, Length: 0, qty: 0 };
+
+    // TB
+    const TB = r?.traverses?.bottom
+      ? {
+          Ref: r.traverses.bottom.ref,
+          Length: r.traverses.bottom.length ?? 0,
+          qty: r.traverses.bottom.qty ?? 0,
+        }
+      : { Ref: null, Length: 0, qty: 0 };
+
+    // Cornière
+    const Corner = r?.corner
+      ? {
+          Ref: r.corner.ref,
+          Length: r.corner.length ?? 0,
+          qty: r.corner.qty ?? 0,
+        }
+      : { Ref: null, Length: 0, qty: 0 };
+
     return {
       Profiles: {
-        RT: rt
-          ? { Ref: rt.ref, Length: rt.length, qty: rt.qty }
-          : { Ref: null, Length: 0, qty: 0 },
-        RB: rb
-          ? { Ref: rb.ref, Length: rb.length, qty: rb.qty }
-          : { Ref: null, Length: 0, qty: 0 },
-        Handle: hd
-          ? { Ref: hd.ref, Length: hd.length ?? 0, qty: hd.qty ?? n }
-          : { Ref: String(handle.value || ""), Length: 0, qty: n },
-
-        // ⬇️ Ajout du Type dans TI
-        TI: ti
-          ? {
-              Ref: ti.ref,
-              Length: ti.length ?? 0,
-              Type: traverseType,
-              Leaves: leaves,
-            }
-          : { Ref: null, Length: 0, Type: traverseType, Leaves: leaves },
-
-        THB: thb
-          ? { Ref: thb.ref, Length: thb.length ?? 0, qty: thb.qty ?? 0 }
-          : { Ref: null, Length: 0, qty: 0 },
-        Corner: ccla
-          ? { Ref: ccla.ref, Length: ccla.length ?? 0, qty: ccla.qty ?? 0 }
-          : { Ref: null, Length: 0, qty: 0 },
+        RT,
+        RB,
+        Handle,
+        TI,
+        TH,
+        TB,
+        Corner,
         finish: { code: finishCode, label: finishLabel },
       },
     };
-  }
+  });
 
-  // --- Sortie "lisible" -------------------
-  const profils = computed(() => shapeProfiles(rowsFromCalc()));
-
-  // --- Données géométriques utiles 3D -----
+  // Données géométriques utiles 3D
   const geometry = computed(() => ({
     width: Number(width.value) || 0,
     height: Number(height.value) || 0,
@@ -115,5 +141,5 @@ export const useDerivedStore = defineStore("derived", () => {
     leavesCount: Math.max(1, Number(leavesCount.value) || 1),
   }));
 
-  return { profils, geometry };
+  return { raw, profils, geometry };
 });

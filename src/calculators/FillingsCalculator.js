@@ -1,70 +1,177 @@
 // src/calculators/FillingsCalculator.js
-import { profils } from "../data/profiles";
 
-// Certaines références de poignées n’existent pas telles quelles dans la DB, on mappe vers la ref “de base”.
-const HANDLE_ALIASES = {
-  "P300-19": "P300",
-  "P600-18": "P600",
-  "P30-18": "P30",
+/**
+ * Calcule les dédits des remplissages (largeur & hauteurs) par vantail.
+ *
+ * Entrées attendues:
+ *  - range: '96' | '96CA' | (autres => traité comme '96')
+ *  - height: hauteur totale du panneau (mm)
+ *  - fillingWidth: largeur utile par vantail (mm) (issue de ProfilesCalculator.meta.fillingWidth)
+ *  - traverseRef: 'TI28' | 'TI37' | 'TI16' | 'TI19' ... (utile pour 96CA)
+ *  - tick: '16' | '19' | '6-8' | '12' ... (conservé pour évolutions)
+ *  - leavesCount: nombre de vantaux
+ *  - heightsByLeaf: { '1': number[], '2': number[], ... } positions (mm) des TI
+ *                   mesurées depuis le BAS jusqu'au CENTRE de la traverse (non triées)
+ *
+ * Sortie:
+ *  {
+ *    perLeaf: {
+ *      '1': {
+ *        width: { raw, cut },
+ *        heights: { bottom: number, between: number[], top: number|null }
+ *      },
+ *      ...
+ *    },
+ *    meta: { range, traverseRef, tick }
+ *  }
+ */
+export const FillingsCalculator = {
+  compute(cfg = {}) {
+    const range = String(cfg.range || "").toUpperCase();
+    const height = toNum(cfg.height, 0);
+    const fillingWidth = toNum(cfg.fillingWidth, 0);
+    const traverseRef = String(cfg.traverseRef || "");
+    const tick = String(cfg.tick || "");
+    const leaves = Math.max(1, Math.floor(Number(cfg.leavesCount) || 1));
+    const heightsByLeaf = normalizeHeightsByLeaf(cfg.heightsByLeaf, leaves);
+
+    const perLeaf = {};
+
+    for (let i = 1; i <= leaves; i++) {
+      const key = String(i);
+      const centers = (heightsByLeaf[key] || []).slice().sort((a, b) => a - b);
+
+      // LARGEUR : pas de dédit horizontal fourni → largeur = fillingWidth inchangée
+      const width = {
+        raw: fillingWidth,
+        cut: fillingWidth,
+      };
+
+      // HAUTEURS : applique les formules fournies
+      let heights;
+      if (range === "96CA") {
+        heights = computeHeights96CA({ height, centers, traverseRef });
+      } else {
+        // défaut = règles '96'
+        heights = computeHeights96({ height, centers });
+      }
+
+      perLeaf[key] = { width, heights };
+    }
+
+    return {
+      perLeaf,
+      meta: { range, traverseRef, tick },
+    };
+  },
 };
 
-function resolveHandleRef(ref, range) {
-  const r = String(ref || "");
-  if (r) return HANDLE_ALIASES[r] || r;
+/* ----------------------------- RÈGLES FOURNIES ----------------------------- */
+/**
+ * Gamme 96
+ * Sans traverse : H = height - 50
+ * Avec traverses :
+ *   h1 = y1 - 1
+ *   hi = yi - yi-1 - 2
+ *   hn = height - 50 - yn - 1
+ */
+function computeHeights96({ height, centers }) {
+  const n = centers.length;
+  if (n === 0) {
+    const H = height - 50;
+    return { bottom: clip0(H), between: [], top: null };
+  }
 
-  // Fallback si aucune poignée n'est fournie : on choisit une poignée cohérente par gamme
-  if (String(range) === "82") return "P100";
-  if (String(range) === "96") return "P300";
-  if (String(range) === "96CA") return "P810";
-  return "P300";
-}
+  const y1 = centers[0];
+  const yn = centers[n - 1];
 
-function getYZFromProfiles(handleRef) {
-  const meta = profils.find((p) => p.reference === handleRef);
-  // y, z peuvent être non définis (ou string); on sécurise
-  const y = Number(meta?.y) || 0;
-  const z = Number(meta?.z) || 0;
-  return { y, z, found: !!meta };
+  const bottom = y1 - 1;
+
+  const between = [];
+  for (let k = 1; k < n; k++) {
+    const yi = centers[k];
+    const yim1 = centers[k - 1];
+    between.push(yi - yim1 - 2);
+  }
+
+  const top = height - 50 - yn - 1;
+
+  return {
+    bottom: clip0(bottom),
+    between: between.map(clip0),
+    top: clip0(top),
+  };
 }
 
 /**
- * Calcule la largeur du remplissage (unitaire) selon :
- *  - rail=double & arrangement=quinconce : (width - 2*z + (y * (leavesCount-1))) / leavesCount
- *  - rail=double & arrangement=centre    : (width - 4*z + (y * 2)) / 4
- *  - rail=simple                         :  width - 2*z
- *
- * cfg attendu :
- * {
- *   range: '82' | '96' | '96CA',
- *   rail: 'simple' | 'double',
- *   arrangement: 'quinconce' | 'centre',
- *   width: number,
- *   leavesCount: number,
- *   handle?: 'P100' | 'P200' | 'P300-19' | ...
- * }
+ * Gamme 96CA
+ * Sans traverse :
+ *   H = height - 54 - 120
+ * Avec traverses TI28:
+ *   h1 = y1 - 45 - 5
+ *   hi = yi - yi-1 - 10
+ *   hn = height - 55 - yn - 20 - 5
+ * Avec traverses TI37:
+ *   h1 = y1 - 45 - 9.5
+ *   hi = yi - yi-1 - 19
+ *   hn = height - 55 - yn - 20 - 9.5
  */
-export const FillingsCalculator = {
-  calculateWidth(cfg = {}) {
-    const rail = String(cfg.rail || "double");
-    const arrangement = String(cfg.arrangement || "quinconce");
-    const W = Math.max(0, Math.floor(Number(cfg.width) || 0));
-    const leaves = Math.max(1, Math.floor(Number(cfg.leavesCount) || 1));
+function computeHeights96CA({ height, centers, traverseRef }) {
+  const n = centers.length;
 
-    // Poignée → y / z
-    const resolvedRef = resolveHandleRef(cfg.handle, cfg.range);
-    const { y, z } = getYZFromProfiles(resolvedRef); // profils.js contient bien y et z pour les poignées.
+  if (n === 0) {
+    const H = height - 54 - 120;
+    return { bottom: clip0(H), between: [], top: null };
+  }
 
-    if (rail === "double") {
-      if (arrangement === "centre") {
-        // (width - 4*z + (y*2)) / 4
-        return Math.max(0, Math.floor((W - 4 * z + y * 2) / 4));
-      }
-      // quinconce par défaut
-      // (width - 2*z + (y*(leaves-1))) / leaves
-      return Math.max(0, Math.floor((W - 2 * z + y * (leaves - 1)) / leaves));
+  const isTI37 = /^TI37$/i.test(traverseRef);
+  const addBottom = isTI37 ? 45 + 9.5 : 45 + 5; // 54.5 / 50
+  const addBetween = isTI37 ? 19 : 10;
+  const addTop = isTI37 ? 55 + 20 + 9.5 : 55 + 20 + 5; // 84.5 / 80
+
+  const y1 = centers[0];
+  const yn = centers[n - 1];
+
+  const bottom = y1 - addBottom;
+
+  const between = [];
+  for (let k = 1; k < n; k++) {
+    const yi = centers[k];
+    const yim1 = centers[k - 1];
+    between.push(yi - yim1 - addBetween);
+  }
+
+  const top = height - addTop - yn;
+
+  return {
+    bottom: clip0(bottom),
+    between: between.map(clip0),
+    top: clip0(top),
+  };
+}
+
+/* -------------------------------- HELPERS -------------------------------- */
+
+function toNum(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function clip0(v) {
+  const n = Number(v) || 0;
+  return n < 0 ? 0 : n;
+}
+
+function normalizeHeightsByLeaf(input, leaves) {
+  const out = {};
+  if (input && typeof input === "object") {
+    for (let i = 1; i <= leaves; i++) {
+      const key = String(i);
+      const arr = Array.isArray(input[key]) ? input[key] : [];
+      out[key] = arr.map(toNum);
     }
-
-    // rail simple : width - 2*z
-    return Math.max(0, Math.floor(W - 2 * z));
-  },
-};
+    return out;
+  }
+  for (let i = 1; i <= leaves; i++) out[String(i)] = [];
+  return out;
+}

@@ -3,7 +3,7 @@ import { ProfilesCalculator } from "../calculators/ProfilesCalculator";
 
 const TICKS_BY_RANGE = {
   96: ["16", "19"],
-  "96CA": ["6-8", "12"],
+  "96CA": ["6-8", "10-12"],
   82: ["19"],
 };
 
@@ -199,6 +199,9 @@ export const useConfigStore = defineStore("config", {
       const value = String(v);
       const valid = TICKS_BY_RANGE[this.range] || ["19"];
       this.tick = valid.includes(value) ? value : valid[0];
+      if (this.tick === "10-12") {
+        this.colorPGlass = "Translucide";
+      }
       this.setColorProfile(this.colorProfiles);
       this.setHandle(this.handle);
     },

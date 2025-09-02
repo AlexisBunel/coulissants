@@ -2,6 +2,7 @@ import { defineStore, storeToRefs } from "pinia";
 import { computed } from "vue";
 import { useConfigStore } from "./config.store";
 import { ProfilesCalculator } from "../calculators/ProfilesCalculator";
+import { AccessoriesCalculator } from "../calculators/AccessoriesCalculator";
 import { FillingsCalculator } from "../calculators/FillingsCalculator";
 import { FINISH_LABEL } from "../data/finishes";
 
@@ -18,6 +19,11 @@ export const useDerivedStore = defineStore("derived", () => {
     colorProfiles,
     tick,
     handle,
+    absorber,
+    colorSeal,
+    colorBrushes,
+    colorPGlass,
+    filling,
   } = storeToRefs(config);
 
   const raw = computed(() =>
@@ -181,13 +187,110 @@ export const useDerivedStore = defineStore("derived", () => {
     })
   );
 
-  // Données géométriques utiles 3D
-  const geometry = computed(() => ({
-    width: Number(width.value) || 0,
-    height: Number(height.value) || 0,
-    rail: String(rail.value),
-    leavesCount: Math.max(1, Number(leavesCount.value) || 1),
-  }));
+  const accessories = computed(() => {
+    const PRAW = raw.value || {};
+    const P = profils.value || {};
 
-  return { raw, profils, fillings, geometry };
+    const nLeaves = Math.max(1, Number(leavesCount.value) || 1);
+
+    const base = AccessoriesCalculator.compute({
+      range: String(range.value || ""),
+      tick: String(tick?.value ?? ""),
+      rail: String(rail.value || ""),
+      width: Number(width.value) || 0,
+      leavesCount: nLeaves,
+      absorber: absorber?.value || {},
+      colors: {
+        seal: String(colorSeal?.value ?? ""),
+        brushes: String(colorBrushes?.value ?? ""),
+        pglass: String(colorPGlass?.value ?? ""),
+      },
+      lengths: {
+        handleLen: Number(P?.Handle?.Length ?? PRAW?.handle?.length ?? 0),
+        topTraverseLen: Number(
+          P?.TH?.Length ?? PRAW?.traverses?.top?.length ?? 0
+        ),
+        cornerLen: Number(P?.Corner?.Length ?? PRAW?.corner?.length ?? 0),
+        tiQty: Number(PRAW?.traverses?.intermediate?.qty ?? 0),
+        tiLen: Number(PRAW?.traverses?.intermediate?.length ?? 0),
+      },
+    });
+
+    // On renvoie tel quel : chaque ligne porte sa propre finition éventuelle
+    return base; // { list, byType, meta }
+  });
+
+  // Données géométriques utiles 3D
+  const geometry = computed(() => {
+    const n = Math.max(1, Number(leavesCount.value) || 1);
+    const finishCode = String(colorProfiles.value || "");
+    const finishLabel = FINISH_LABEL[finishCode] || finishCode;
+    const r = raw.value || {};
+
+    // Sécurité / helpers
+    const pack = (node) =>
+      node
+        ? {
+            ref: node.ref,
+            length: Number(node.length) || 0,
+            qty: Number(node.qty) || 0,
+          }
+        : { ref: null, length: 0, qty: 0 };
+
+    // Traverses intermédiaires par vantail  hauteurs (depuis la config)
+    const groups = heightsByLeaf.value; // { '1':[...], '2':[...], ...}
+    const ti = r?.traverses?.intermediate || null;
+    const tiByLeaf = Object.entries(groups).map(([leaf, heights]) => ({
+      leaf: Number(leaf),
+      heights: Array.isArray(heights) ? heights.slice() : [],
+      count: Array.isArray(heights) ? heights.length : 0,
+      length: Number(ti?.length) || 0, // longueur TI (identique pour chaque traverse)
+    }));
+
+    return {
+      overall: {
+        range: String(range.value),
+        width: Number(width.value) || 0,
+        height: Number(height.value) || 0, // hauteur totale
+        tick: String(tick?.value ?? ""), // épaisseur
+        filling: String(filling?.value ?? ""), // valeur config.filling
+        arrangement: String(arrangement.value || ""),
+        rail: String(rail.value),
+        leavesCount: n,
+        profilesColor: { code: finishCode, label: finishLabel }, // couleur des profils
+      },
+      profiles: {
+        rails: {
+          top: pack(r?.rails?.top),
+          bottom: pack(r?.rails?.bottom),
+        },
+        handle: pack(r?.handle),
+        corner: pack(r?.corner),
+        traverses: {
+          top: pack(r?.traverses?.top),
+          bottom: pack(r?.traverses?.bottom),
+          intermediate: {
+            ref: r?.traverses?.intermediate?.ref || null,
+            length: Number(r?.traverses?.intermediate?.length) || 0,
+            type:
+              String(
+                traverses.value?.type ??
+                  traverses.value?.groups?.[0]?.type ??
+                  ""
+              ) || null,
+            qty: Number(r?.traverses?.intermediate?.qty) || 0,
+            byLeaf: tiByLeaf, // ✅ rangé par vantail avec leurs hauteurs
+          },
+        },
+      },
+      fillings: {
+        // largeur utile calculée par ProfilesCalculator
+        widthPerLeaf: Number(r?.meta?.fillingWidth) || 0, // :contentReference[oaicite:4]{index=4}
+        heightsByLeaf: groups, // mm depuis le bas (config)  :contentReference[oaicite:5]{index=5}
+        computed: fillings.value || null, // passe-plat du calcul complet (si utilisé par ta 3D)
+      },
+    };
+  });
+
+  return { raw, profils, accessories, fillings, geometry };
 });

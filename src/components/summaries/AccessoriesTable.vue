@@ -17,13 +17,17 @@ const d = useDerivedStore();
         <th>Longueur</th>
       </tr>
     </thead>
+
     <tbody>
-      <tr v-for="row in d.profiles" :key="row.ref + '-' + row.length">
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
+      <tr
+        v-for="(row, i) in d.accessories.list"
+        :key="row.ref + '-' + (row.length ?? 0) + '-' + i"
+      >
+        <td>{{ row.ref }}</td>
+        <td>{{ row.designation || row.type || "—" }}</td>
+        <td>{{ row.finishLabel || "—" }}</td>
+        <td class="num">{{ row.qty }}</td>
+        <td class="num">{{ row.length ? row.length + " mm" : "—" }}</td>
       </tr>
     </tbody>
   </table>

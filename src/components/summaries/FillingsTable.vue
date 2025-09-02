@@ -7,7 +7,6 @@ import { storeToRefs } from "pinia";
 const d = useDerivedStore();
 const cfg = useConfigStore();
 const { filling, tick, typeRemplissage } = storeToRefs(cfg);
-// NOTE: si ton store n'a que `typeRemplissage`, on s'en sert en fallback.
 
 const normTick = computed(() => {
   const t = String(tick?.value ?? "").trim();
@@ -15,21 +14,32 @@ const normTick = computed(() => {
   if (t === "12") return "12";
   if (t === "16") return "16";
   if (t === "19") return "19";
-  return t || ""; // fallback
+  return t || "";
+});
+
+const fillType = computed(() =>
+  (filling?.value || typeRemplissage?.value || "").toString().toLowerCase()
+);
+
+const mirrorDelta = computed(() => {
+  if (fillType.value !== "miroir") return 0;
+  return normTick.value === "19" ? 2 : normTick.value === "16" ? 4 : 0;
 });
 
 function getDesignation() {
-  const f = (filling?.value || typeRemplissage?.value || "")
-    .toString()
-    .toLowerCase();
+  const f = fillType.value;
   const t = normTick.value;
   if (f === "standard") {
-    // Panneau 16mm | 19mm
     return t ? `Panneau ${t}mm` : "Panneau";
   }
   if (f === "verre") {
-    // Verre 6mm - 8mm | Verre 12mm
     return t === "6-8" ? "Verre 6mm - 8mm" : t ? `Verre ${t}mm` : "Verre";
+  }
+  if (f === "miroir") {
+    // Panneau support pour miroir
+    if (t === "19") return "Panneau 15mm";
+    if (t === "16") return "Panneau 12mm";
+    return "Panneau";
   }
   return t ? `Remplissage ${t}mm` : "Remplissage";
 }
@@ -37,7 +47,6 @@ function getDesignation() {
 function fmtMm(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "0 mm";
-  // si entier, pas de décimale; sinon une décimale (ex: 9.5)
   return (Number.isInteger(n) ? n : Math.round(n * 10) / 10) + " mm";
 }
 
@@ -45,35 +54,45 @@ const rows = computed(() => {
   const F = d.fillings; // { perLeaf, meta }
   if (!F || !F.perLeaf) return [];
 
-  const designation = getDesignation();
-  const bag = new Map(); // key = `${designation}|${dim}` -> { designation, qty, dim }
+  const panelDesignation = getDesignation();
+  const isMirror = fillType.value === "miroir";
+  const delta = mirrorDelta.value;
+
+  const bag = new Map(); // key = `${designation}|${dim}` -> { designation, qty, dimensions: dim }
+
+  const addLine = (designation, H, W) => {
+    if (!(H > 0 && W > 0)) return;
+    const dimStr = `${fmtMm(H)} X ${fmtMm(W)}`;
+    const key = `${designation}|${dimStr}`;
+    if (!bag.has(key))
+      bag.set(key, { designation, qty: 0, dimensions: dimStr });
+    bag.get(key).qty += 1;
+  };
 
   // Parcours vantaux
-  for (const [leafId, data] of Object.entries(F.perLeaf)) {
+  for (const data of Object.values(F.perLeaf)) {
     if (!data) continue;
-    const W = data.width?.cut ?? 0;
+    const W = Number(data.width?.cut ?? 0);
 
-    const pushPiece = (H) => {
-      if (!H || H <= 0) return;
-      const dimStr = `${fmtMm(H)} X ${fmtMm(W)}`;
-      const key = `${designation}|${dimStr}`;
-      if (!bag.has(key)) {
-        bag.set(key, { designation, qty: 0, dimensions: dimStr });
+    const pushForHeight = (H) => {
+      if (!(H > 0)) return;
+      // 1) Panneau (toujours)
+      addLine(panelDesignation, H, W);
+
+      // 2) Miroir 4mm (si filling = "miroir")
+      if (isMirror) {
+        addLine("Miroir ép. 4mm", H - delta, W - delta);
       }
-      bag.get(key).qty += 1;
     };
 
-    // Bas
-    if (data.heights?.bottom != null) pushPiece(data.heights.bottom);
-    // Intermédiaires
+    if (data.heights?.bottom != null)
+      pushForHeight(Number(data.heights.bottom));
     if (Array.isArray(data.heights?.between)) {
-      for (const h of data.heights.between) pushPiece(h);
+      for (const h of data.heights.between) pushForHeight(Number(h));
     }
-    // Haut (si calculé)
-    if (data.heights?.top != null) pushPiece(data.heights.top);
+    if (data.heights?.top != null) pushForHeight(Number(data.heights.top));
   }
 
-  // On renvoie les items triés par dimensions (optionnel)
   return Array.from(bag.values()).sort((a, b) =>
     a.dimensions.localeCompare(b.dimensions, "fr")
   );

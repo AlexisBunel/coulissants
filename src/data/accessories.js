@@ -54,6 +54,12 @@ export const accessoires = [
     gammes: ["96"],
   },
   {
+    reference: "JB48/500",
+    type: "balai",
+    designation: "Balai de côté",
+    gammes: ["96"],
+  },
+  {
     reference: "KITJB",
     type: "balai",
     designation: "Kit 2 joint brosses",

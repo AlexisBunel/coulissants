@@ -58,8 +58,8 @@ watch(
         </select>
       </label>
 
-      <!-- Options spécifiques à la gamme 96CA -->
-      <template v-if="config.range === '96CA'">
+      <!-- Options spécifiques à aux gammes -->
+      <template v-if="config.range === '96' || '96CA'">
         <label>
           Couleur des joints de butée :
           <select v-model="config.colorSeal">
@@ -67,11 +67,12 @@ watch(
             <option value="Gris">Gris</option>
           </select>
         </label>
-
+      </template>
+      <template v-if="config.range === '96CA'">
         <label>
           Couleur des profils de vitrage :
           <select v-model="config.colorPGlass">
-            <option value="Noir">Noir</option>
+            <option v-if="config.tick === '6-8'" value="Noir">Noir</option>
             <option value="Translucide">Translucide</option>
           </select>
         </label>

@@ -108,11 +108,11 @@ export class ThreeManager {
   async instantiate(ref) {
     const template = await this.loadModel(ref);
     const clone = template.clone(true);
+    clone.userData.ref = ref; // <— mémorise la ref actuelle
     clone.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = false;
         o.receiveShadow = false;
-        // On laisse le material remplacé par applyFinish plus bas
       }
     });
     return clone;
@@ -122,20 +122,39 @@ export class ThreeManager {
    * Diff d’instances : `instances` est une liste plane de:
    * { key, ref, position:{x,y,z}, rotation:{x,y,z}, scale:{x,y,z}, finishCode }
    */
+  /**
+   * Diff d’instances : `instances` est une liste de:
+   * { key, ref, position:{x,y,z}, rotation:{x,y,z}, scale:{x,y,z}, finishCode, visible }
+   */
   async applyInstances(instances = []) {
     const wanted = new Map(instances.map((it) => [it.key, it]));
 
-    // 1) Supprimer ce qui n’est plus voulu
-    for (const [key, node] of this.nodes) {
+    // --- 0) Pré-nettoyage strict des rails (évite tout empilement si ref change)
+    const railKeys = new Set(["rail-top", "rail-bottom"]);
+    for (const child of [...this.root.children]) {
+      if (railKeys.has(child.name)) {
+        const inst = wanted.get(child.name);
+        if (!inst || (child.userData?.ref && child.userData.ref !== inst.ref)) {
+          this.root.remove(child);
+          if (this.nodes.get(child.name) === child)
+            this.nodes.delete(child.name);
+        }
+      }
+    }
+
+    // --- 1) Supprimer ce qui n’est plus voulu (toutes catégories)
+    for (const [key, node] of [...this.nodes]) {
       if (!wanted.has(key)) {
         this.root.remove(node);
         this.nodes.delete(key);
       }
     }
 
-    // 2) Créer / mettre à jour
+    // --- 2) Créer / mettre à jour (et remplacer si ref différente)
     for (const inst of instances) {
       let node = this.nodes.get(inst.key);
+
+      // Créer si absent
       if (!node) {
         node = await this.instantiate(inst.ref);
         node.name = inst.key;
@@ -143,19 +162,47 @@ export class ThreeManager {
         this.nodes.set(inst.key, node);
       }
 
-      // Transforms
+      // Ref différente -> remplacement dur (évite empilement)
+      if (node.userData?.ref !== inst.ref) {
+        const parent = node.parent || this.root;
+        parent.remove(node);
+
+        const newNode = await this.instantiate(inst.ref);
+        newNode.name = inst.key;
+
+        // Applique la transform et props de l'instance courante
+        newNode.position.set(inst.position.x, inst.position.y, inst.position.z);
+        newNode.rotation.set(inst.rotation.x, inst.rotation.y, inst.rotation.z);
+        newNode.scale.set(inst.scale.x, inst.scale.y, inst.scale.z);
+        newNode.visible = inst.visible !== false;
+
+        // Matériaux (au cas où la finition change en même temps que la ref)
+        if (this.matLib) {
+          const mat = this.matLib.getMaterial(inst.finishCode);
+          if (mat)
+            newNode.traverse((o) => {
+              if (o.isMesh) o.material = mat;
+            });
+        }
+
+        parent.add(newNode);
+        this.nodes.set(inst.key, newNode);
+        node = newNode;
+        continue; // on a déjà tout appliqué pour ce node
+      }
+
+      // Transforms (toujours à jour)
       node.position.set(inst.position.x, inst.position.y, inst.position.z);
       node.rotation.set(inst.rotation.x, inst.rotation.y, inst.rotation.z);
       node.scale.set(inst.scale.x, inst.scale.y, inst.scale.z);
 
-      // Matériaux
+      // Matériaux (au cas où la finition change sans changement de ref)
       if (this.matLib) {
         const mat = this.matLib.getMaterial(inst.finishCode);
-        if (mat) {
+        if (mat)
           node.traverse((o) => {
             if (o.isMesh) o.material = mat;
           });
-        }
       }
 
       node.visible = inst.visible !== false;

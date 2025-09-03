@@ -39,14 +39,6 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
-#canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-</style>
-
 <template>
   <canvas id="canvas" ref="canvasEl"></canvas>
 </template>

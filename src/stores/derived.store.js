@@ -251,6 +251,10 @@ export const useDerivedStore = defineStore("derived", () => {
       overall: {
         range: String(range.value),
         width: Number(width.value) || 0,
+        totalWidth:
+          rail.value === "simple"
+            ? Number(width.value) * Number(leavesCount.value) * 2
+            : Number(width.value),
         height: Number(height.value) || 0, // hauteur totale
         tick: String(tick?.value ?? ""), // épaisseur
         filling: String(filling?.value ?? ""), // valeur config.filling
@@ -264,7 +268,11 @@ export const useDerivedStore = defineStore("derived", () => {
           top: pack(r?.rails?.top),
           bottom: pack(r?.rails?.bottom),
         },
-        handle: pack(r?.handle),
+        handle: {
+          ...pack(r?.handle),
+          y: Number(r?.handle?.y) || 0, // <-- nouveau
+          z: Number(r?.handle?.z) || 0, // <-- nouveau
+        },
         corner: pack(r?.corner),
         traverses: {
           top: pack(r?.traverses?.top),

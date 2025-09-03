@@ -46,6 +46,8 @@ export const ProfilesCalculator = {
           length: handleLength,
           qty: leaves * 2,
           role: "handle",
+          y: Number(y) || 0,
+          z: Number(z) || 0,
         }
       : null;
 

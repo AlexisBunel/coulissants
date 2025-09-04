@@ -48,6 +48,7 @@ export const ProfilesCalculator = {
           role: "handle",
           y: Number(y) || 0,
           z: Number(z) || 0,
+          c: Number(c) || 0,
         }
       : null;
 

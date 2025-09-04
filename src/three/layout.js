@@ -1,7 +1,3 @@
-// /three/layout.js
-// Décrit l’orientation par défaut des refs et construit la liste d’instances
-// à partir du store `geometry`.
-
 // mm -> m helper
 const mmToM = (v) => (Number(v) || 0) / 1000;
 const V = (x = 0, y = 0, z = 0) => ({ x, y, z });
@@ -28,7 +24,7 @@ function isRailAllowed(ref, railType, pos /* 'top' | 'bottom' */) {
   if (!allowed) return true; // fallback permissif si config inconnue
   return allowed.has(String(ref));
 }
-// 1) Métadonnées d’orientation/échelle par ref (.glb)
+
 export const REFS_META = {
   // Rails haut/bas
   RH50: {
@@ -62,7 +58,11 @@ export const REFS_META = {
     scaleAxis: "y",
   },
 
-  CCLA: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
+  CCLA: {
+    axis: "x",
+    rot: { x: 0, y: 0, z: 0 },
+    scaleAxis: "x",
+  },
 
   // Traverses intermédiaires
   TI16: { axis: "x", rot: { x: 0, y: 0, z: Math.PI / 2 }, scaleAxis: "z" },
@@ -85,7 +85,6 @@ export const REFS_META = {
   P810: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
 };
 
-// 3) Échelle le long d’un axe en gardant 1m comme longueur nominale
 function scaleFromLength(axis, lengthMm, nominalMm = 1000) {
   const s = Math.max(0.001, (Number(lengthMm) || nominalMm) / nominalMm);
   const scale = { x: 1, y: 1, z: 1 };
@@ -93,20 +92,49 @@ function scaleFromLength(axis, lengthMm, nominalMm = 1000) {
   return scale;
 }
 
-/**
- * buildInstances(geometry) -> retourne une liste d’instances
- * Chaque instance : { key, ref, position, rotation, scale, finishCode, visible }
- *
- * Convention espace : X = largeur, Y = hauteur, Z = profondeur.
- */
 export function buildInstances(geometry) {
   const list = [];
   if (!geometry) return list;
 
   const W = mmToM(geometry.overall.width);
-  const TW = mmToM(geometry.overall.totalWidth);
   const H = mmToM(geometry.overall.height);
   const finishCode = geometry.overall.profilesColor?.code || "BR";
+
+  // --- Communs aux poignées et cornières ---
+  const range = String(geometry?.overall?.range || "");
+  const railType = String(geometry?.overall?.rail || "").toLowerCase(); // 'simple' | 'double'
+  const arrangement = String(
+    geometry?.overall?.arrangement || ""
+  ).toLowerCase();
+  const leaves = Number(geometry?.overall?.leavesCount) || 1;
+
+  const TW = mmToM(
+    Number(geometry?.overall?.totalWidth) ||
+      Number(geometry?.overall?.width) ||
+      0
+  );
+  const deepPmm = Number(-20); // en mm (0 si absent)
+  const deepPM = mmToM(deepPmm);
+
+  const offYmm = Number(geometry?.profiles?.handle?.y) || 0; // offset Y poignée (mm)
+  const offZmm = Number(geometry?.profiles?.handle?.z) || 0; // offset Z poignée (mm)
+  const cMm = Number(geometry?.profiles?.handle?.c) || 0; // c en mm (même source que y/z)
+  const wLeafMm = Number(geometry?.fillings?.widthPerLeaf) || 0; // largeur panneau (mm)
+  const LVmm = offZmm + wLeafMm + offZmm; // largeur d'un vantail (LV)
+
+  const stepDepthMm = depthStepFromRange(range); // 41 si 82, sinon 46
+  const stepDepthM = mmToM(stepDepthMm);
+
+  // Hauteur poignée (pivot non centré) : gauche à 18mm, droite à 18mm + length
+  const handleLengthMm =
+    Number(
+      geometry?.profiles?.handle?.length ?? geometry?.profiles?.handle?.lenght
+    ) || 1000;
+  const yLeftM = mmToM(18);
+  const yRightM = mmToM(18 + handleLengthMm);
+
+  const refTop = geometry.profiles.rails.top.ref; // ex: RH96
+  const refBot = geometry.profiles.rails.bottom.ref; // ex: RB65
 
   const CalcRBDecals = (rail, range, tick) => {
     if (rail === "double") {
@@ -142,11 +170,46 @@ export function buildInstances(geometry) {
     )
   );
 
-  // RAILS (haut / bas)
-  const refTop = geometry.profiles.rails.top.ref; // ex: RH96
-  const refBot = geometry.profiles.rails.bottom.ref; // ex: RB65
-  const railType = geometry.overall.rail;
+  // Origines (X, Z) de chaque vantail en MÈTRES (latéral & profondeur)
+  const leafOrigins = []; // [{ xM, zM }]
+  if (railType === "simple") {
+    let xM = -TW / 2;
+    for (let i = 0; i < leaves; i++) {
+      leafOrigins.push({ xM, zM: deepPM });
+      xM += mmToM(LVmm);
+    }
+  } else if (railType === "double" && arrangement === "quinconce") {
+    let xM = -TW / 2;
+    for (let i = 0; i < leaves; i++) {
+      const zM = i === 0 ? -deepPM : i % 2 === 1 ? deepPM + stepDepthM : deepPM;
+      leafOrigins.push({ xM, zM });
+      xM += mmToM(LVmm - (offZmm + offYmm));
+    }
+  } else if (
+    railType === "double" &&
+    (arrangement === "avant-centre" ||
+      arrangement === "avant_centre" ||
+      arrangement === "avantcentre" ||
+      arrangement === "centre")
+  ) {
+    let xM = -TW / 2;
+    for (let i = 0; i < leaves; i++) {
+      const mod = i % 4;
+      const zM = mod === 0 || mod === 3 ? deepPM : deepPM + stepDepthM;
+      leafOrigins.push({ xM, zM });
+      if (i === 0 || i === 2) xM += mmToM(LVmm - (offZmm + offYmm));
+      else xM += mmToM(LVmm);
+    }
+  } else {
+    // fallback: comme simple
+    let xM = -TW / 2;
+    for (let i = 0; i < leaves; i++) {
+      leafOrigins.push({ xM, zM: deepPM });
+      xM += mmToM(LVmm);
+    }
+  }
 
+  // RAILS (haut / bas)
   if (refTop && REFS_META[refTop] && isRailAllowed(refTop, railType, "top")) {
     const m = REFS_META[refTop];
     list.push({
@@ -190,104 +253,12 @@ export function buildInstances(geometry) {
   const hRef = geometry?.profiles?.handle?.ref;
   if (hRef && REFS_META[hRef]) {
     const m = REFS_META[hRef];
+    const handleScale = scaleFromLength(m.scaleAxis || "y", handleLengthMm);
 
-    const leaves = Number(geometry?.overall?.leavesCount) || 1;
-    const railType = String(geometry?.overall?.rail || "").toLowerCase(); // 'simple' | 'double'
-    const arrangement = String(
-      geometry?.overall?.arrangement || ""
-    ).toLowerCase(); // 'quinconce' | 'avant-centre'...
-    const range = String(geometry?.overall?.range || "");
-
-    const offYmm = Number(geometry?.profiles?.handle?.y) || 0; // offset Y poignée (mm)
-    const offZmm = Number(geometry?.profiles?.handle?.z) || 0; // offset Z latéral poignée (mm)
-    const wLeafMm = Number(geometry?.fillings?.widthPerLeaf) || 0; // largeur panneau (mm)
-    const LVmm = offZmm + wLeafMm + offZmm; // largeur d'un vantail (LV)
-
-    // largeur totale en mètres (pour ancrer le 1er vantail à -TW/2)
-    const TW = mmToM(
-      Number(geometry?.overall?.totalWidth) ||
-        Number(geometry?.overall?.width) ||
-        0
-    );
-
-    // profondeur paramétrée (deepP) — en MÈTRES
-    const deepPmm = Number(-20); // si non présent -> 0
-    const deepPM = mmToM(deepPmm);
-
-    // pas de profondeur entre plans (41 ou 46 mm selon gamme)
-    const stepDepthMm = range === "82" ? 41 : 46;
-    const stepDepthM = mmToM(stepDepthMm);
-
-    // longueur & scale des poignées
-    const lengthMm =
-      Number(
-        geometry?.profiles?.handle?.length ?? geometry?.profiles?.handle?.lenght
-      ) || 1000;
-    const handleScale = scaleFromLength(m.scaleAxis || "y", lengthMm);
-
-    // Hauteur :
-    // - poignée gauche : à 18 mm du sol (pivot non centré toléré)
-    // - poignée droite : + longueur (comme demandé)
-    const yLeftM = mmToM(18);
-    const yRightM = mmToM(18 + lengthMm);
-
-    // Origines (X, Z) de chaque vantail en MÈTRES (latéral & profondeur)
-    const leafOrigins = []; // [{ xM, zM }]
-    if (railType === "simple") {
-      // latéral: v1 = -TW/2 ; v(n+1) = v(n) + LV
-      // profondeur: tous = deepP
-      let xM = -TW / 2;
-      for (let i = 0; i < leaves; i++) {
-        leafOrigins.push({ xM, zM: deepPM });
-        xM += mmToM(LVmm);
-      }
-    } else if (railType === "double" && arrangement === "quinconce") {
-      // latéral: v1 = -TW/2 ; v(n+1) = v(n) + LV - (z + y)
-      // profondeur: v1 = -deepP ; v2 = deepP + step ; v3 = deepP ; v4 = deepP + step ; ...
-      let xM = -TW / 2;
-      for (let i = 0; i < leaves; i++) {
-        const zM =
-          i === 0 ? deepPM : i % 2 === 1 ? deepPM + stepDepthM : deepPM;
-        leafOrigins.push({ xM, zM });
-        xM += mmToM(LVmm - (offZmm + offYmm));
-      }
-    } else if (railType === "double" && arrangement === "centre") {
-      // latéral:
-      //  v1 = -TW/2
-      //  v2 = v1 + LV - (z + y)
-      //  v3 = v2 + LV
-      //  v4 = v3 + LV - (z + y)
-      // profondeur: pattern /4 -> [deepP, deepP+step, deepP+step, deepP]
-      let xM = -TW / 2;
-      for (let i = 0; i < leaves; i++) {
-        const mod = i % 4;
-        const zM = mod === 0 || mod === 3 ? deepPM : deepPM + stepDepthM;
-        leafOrigins.push({ xM, zM });
-        if (i === 0 || i === 2) {
-          xM += mmToM(LVmm - (offZmm + offYmm));
-        } else {
-          xM += mmToM(LVmm);
-        }
-      }
-    } else {
-      // fallback: comme simple
-      let xM = -TW / 2;
-      for (let i = 0; i < leaves; i++) {
-        leafOrigins.push({ xM, zM: deepPM });
-        xM += mmToM(LVmm);
-      }
-    }
-
-    // Deux poignées par vantail :
-    // - Gauche : à l'origine du vantail
-    // - Droite : à l'extrémité du vantail (miroir réel, + longueur en Y)
     for (let leafIdx = 0; leafIdx < leaves; leafIdx++) {
-      const { xM: baseXM, zM: baseZM } = leafOrigins[leafIdx] || {
-        xM: -TW / 2,
-        zM: deepPM,
-      };
+      const { xM: baseXM, zM: baseZM } = leafOrigins[leafIdx];
 
-      // Gauche
+      // gauche
       list.push({
         key: `handle-${leafIdx + 1}-L`,
         ref: hRef,
@@ -298,8 +269,8 @@ export function buildInstances(geometry) {
         visible: true,
       });
 
-      // Droite (miroir sur Z + π, et rehaussée d'une longueur)
-      const xRightM = baseXM + mmToM(LVmm); // à l'extrémité droite du vantail
+      // droite : miroir Z + π, rehaussée d'une longueur, à l’extrémité du vantail
+      const xRightM = baseXM + mmToM(LVmm);
       list.push({
         key: `handle-${leafIdx + 1}-R`,
         ref: hRef,
@@ -312,28 +283,36 @@ export function buildInstances(geometry) {
     }
   }
 
-  // TRAVERSES INTERMÉDIAIRES par vantail
-  const tiRef = geometry.profiles.traverses.intermediate.ref; // ex: TI28
-  const byLeaf = geometry.profiles.traverses.intermediate.byLeaf || {}; // { '1':[h1,h2], '2':[...], ... }
-  const leaves = Number(geometry.overall.leavesCount) || 1;
-  const leafW = mmToM(geometry.fillings.widthPerLeaf || 0) || W / leaves;
+  // =====================
+  // CORNIÈRES BAS (gamme 82 ou 96)
+  // =====================
+  const refCorner = geometry?.profiles?.corner?.ref || "CCLA";
+  const cornerLength = Number(geometry?.profiles?.corner?.length) || 1000;
 
-  if (tiRef && REFS_META[tiRef]) {
-    const m = REFS_META[tiRef];
-    for (let leaf = 1; leaf <= leaves; leaf++) {
-      const heights = byLeaf[String(leaf)] || [];
-      const xCenter = -W / 2 + (leaf - 0.5) * leafW; // centrage simple
-      heights.forEach((hMm, idx) => {
-        const key = `ti-${leaf}-${idx}`;
-        list.push({
-          key,
-          ref: tiRef,
-          position: V(xCenter, mmToM(hMm), 0),
-          rotation: V(m.rot.x, m.rot.y, m.rot.z),
-          scale: scaleFromLength(m.axis, leafW * 1000), // échelle = largeur du vantail
-          finishCode,
-          visible: true,
-        });
+  if (
+    (range === "82" || range === "96") &&
+    (REFS_META[refCorner] || REFS_META.CCLA)
+  ) {
+    const mC = REFS_META[refCorner] || REFS_META.CCLA;
+    const cornerScale = scaleFromLength(mC.scaleAxis || "x", cornerLength);
+
+    for (let leafIdx = 0; leafIdx < leaves; leafIdx++) {
+      const { xM: baseXM, zM: baseZM } = leafOrigins[leafIdx];
+
+      // x = origine du vantail + (z + c)   (PAS de /2)
+      const xCornerM = baseXM + mmToM(offZmm + cMm / 2);
+      // y = yLeftM (18 mm du sol)
+      // z = deepP + 1 mm
+      const zCornerM = baseZM + mmToM(1);
+
+      list.push({
+        key: `corner-${leafIdx + 1}-bottom`,
+        ref: refCorner,
+        position: V(xCornerM, yLeftM, zCornerM),
+        rotation: V(mC.rot.x, mC.rot.y, mC.rot.z),
+        scale: cornerScale,
+        finishCode,
+        visible: true,
       });
     }
   }

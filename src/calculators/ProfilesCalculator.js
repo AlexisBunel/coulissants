@@ -58,7 +58,7 @@ export const ProfilesCalculator = {
         : findProfileMeta("CCLA")
         ? {
             ref: "CCLA",
-            length: Math.max(0, fillingWidth - 2 * c),
+            length: Math.max(0, fillingWidth - c),
             qty: leaves,
             role: "corner",
           }

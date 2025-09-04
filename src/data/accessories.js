@@ -137,4 +137,10 @@ export const accessoires = [
     designation: "Profil de vitrage 10-12",
     gammes: ["96CA"],
   },
+  {
+    reference: "EQUERSUSPM",
+    type: "equerre",
+    designation: "Équerre de suspension + vis",
+    gammes: ["96CA"],
+  },
 ];

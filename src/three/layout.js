@@ -62,6 +62,8 @@ export const REFS_META = {
     scaleAxis: "y",
   },
 
+  CCLA: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
+
   // Traverses intermédiaires
   TI16: { axis: "x", rot: { x: 0, y: 0, z: Math.PI / 2 }, scaleAxis: "z" },
   TI19: { axis: "x", rot: { x: 0, y: 0, z: Math.PI / 2 }, scaleAxis: "z" },
@@ -70,17 +72,17 @@ export const REFS_META = {
   THB52: { axis: "x", rot: { x: 0, y: 0, z: Math.PI / 2 }, scaleAxis: "z" },
 
   // Poignées (neutre par défaut)
-  P100: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "x" },
-  P110: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  "P300-16": { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P30: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P200: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  "P300-19": { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P400: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P600: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P700: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P710: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
-  P810: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "z" },
+  P100: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P110: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  "P300-16": { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P30: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P200: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  "P300-19": { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P400: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P600: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P700: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P710: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
+  P810: { axis: "x", rot: { x: 0, y: 0, z: 0 }, scaleAxis: "y" },
 };
 
 // 3) Échelle le long d’un axe en gardant 1m comme longueur nominale
@@ -182,7 +184,9 @@ export function buildInstances(geometry) {
     });
   }
 
-  // Poignée — exemple minimal si présente (position à ajuster selon ton modèle)
+  // =====================
+  // POIGNÉES (2 par vantail)
+  // =====================
   const hRef = geometry?.profiles?.handle?.ref;
   if (hRef && REFS_META[hRef]) {
     const m = REFS_META[hRef];
@@ -191,109 +195,123 @@ export function buildInstances(geometry) {
     const railType = String(geometry?.overall?.rail || "").toLowerCase(); // 'simple' | 'double'
     const arrangement = String(
       geometry?.overall?.arrangement || ""
-    ).toLowerCase(); // 'quinconce' | 'avant-centre' | ...
+    ).toLowerCase(); // 'quinconce' | 'avant-centre'...
     const range = String(geometry?.overall?.range || "");
 
-    const zMm = Number(geometry?.profiles?.handle?.z) || 0; // offset Z latéral (mm)
+    const offYmm = Number(geometry?.profiles?.handle?.y) || 0; // offset Y poignée (mm)
+    const offZmm = Number(geometry?.profiles?.handle?.z) || 0; // offset Z latéral poignée (mm)
     const wLeafMm = Number(geometry?.fillings?.widthPerLeaf) || 0; // largeur panneau (mm)
-    const LVmm = zMm + wLeafMm + zMm; // largeur de vantail (mm)
+    const LVmm = offZmm + wLeafMm + offZmm; // largeur d'un vantail (LV)
 
-    const stepDepthMm = depthStepFromRange(range); // 41 ou 46 mm
-    const yHandle = mmToM(18); // hauteur poignées = 18 mm
+    // largeur totale en mètres (pour ancrer le 1er vantail à -TW/2)
+    const TW = mmToM(
+      Number(geometry?.overall?.totalWidth) ||
+        Number(geometry?.overall?.width) ||
+        0
+    );
 
-    // Calcule la position latérale (X) et profondeur (Z) de chaque vantail (origine du vantail = position de la 1ère poignée)
-    const leafOrigins = []; // [{xMm, zMm}]
-    let xAcc = 0;
+    // profondeur paramétrée (deepP) — en MÈTRES
+    const deepPmm = Number(-20); // si non présent -> 0
+    const deepPM = mmToM(deepPmm);
+
+    // pas de profondeur entre plans (41 ou 46 mm selon gamme)
+    const stepDepthMm = range === "82" ? 41 : 46;
+    const stepDepthM = mmToM(stepDepthMm);
+
+    // longueur & scale des poignées
+    const lengthMm =
+      Number(
+        geometry?.profiles?.handle?.length ?? geometry?.profiles?.handle?.lenght
+      ) || 1000;
+    const handleScale = scaleFromLength(m.scaleAxis || "y", lengthMm);
+
+    // Hauteur :
+    // - poignée gauche : à 18 mm du sol (pivot non centré toléré)
+    // - poignée droite : + longueur (comme demandé)
+    const yLeftM = mmToM(18);
+    const yRightM = mmToM(18 + lengthMm);
+
+    // Origines (X, Z) de chaque vantail en MÈTRES (latéral & profondeur)
+    const leafOrigins = []; // [{ xM, zM }]
     if (railType === "simple") {
-      // -- SIMPLE --
-      // latéral: leaf1=0 ; leaf2=leaf1 + LV ; leaf3=leaf2 + LV ; ...
-      // profondeur: tous à 0
+      // latéral: v1 = -TW/2 ; v(n+1) = v(n) + LV
+      // profondeur: tous = deepP
+      let xM = -TW / 2;
       for (let i = 0; i < leaves; i++) {
-        leafOrigins.push({ xMm: xAcc, zMm: 0 });
-        xAcc += LVmm;
+        leafOrigins.push({ xM, zM: deepPM });
+        xM += mmToM(LVmm);
       }
-    } else if (arrangement === "quinconce") {
-      // -- QUINCONCE --
-      // latéral: leaf1=0 ; leaf(n+1) = leaf(n) + LV - z
-      // profondeur: alterne 0, step, 0, step, ...
+    } else if (railType === "double" && arrangement === "quinconce") {
+      // latéral: v1 = -TW/2 ; v(n+1) = v(n) + LV - (z + y)
+      // profondeur: v1 = -deepP ; v2 = deepP + step ; v3 = deepP ; v4 = deepP + step ; ...
+      let xM = -TW / 2;
       for (let i = 0; i < leaves; i++) {
-        const depth = i % 2 === 1 ? stepDepthMm : 0; // 0, step, 0, step...
-        if (i === 0) {
-          leafOrigins.push({ xMm: 0, zMm: depth });
-          xAcc = LVmm - zMm;
-        } else {
-          leafOrigins.push({ xMm: xAcc, zMm: depth });
-          xAcc += LVmm - zMm;
-        }
+        const zM =
+          i === 0 ? deepPM : i % 2 === 1 ? deepPM + stepDepthM : deepPM;
+        leafOrigins.push({ xM, zM });
+        xM += mmToM(LVmm - (offZmm + offYmm));
       }
-    } else if (
-      arrangement === "avant-centre" ||
-      arrangement === "avant_centre" ||
-      arrangement === "avantcentre"
-    ) {
-      // -- AVANT CENTRÉ --
+    } else if (railType === "double" && arrangement === "centre") {
       // latéral:
-      //  leaf1 = 0
-      //  leaf2 = leaf1 + LV - z
-      //  leaf3 = leaf2 + LV
-      //  leaf4 = leaf3 + LV - z
-      // -> pattern: + (i pair ? LV : LV - z) si i>0, en partant de i=0
-      // profondeur: pattern par 4 -> [0, step, step, 0] (répète)
+      //  v1 = -TW/2
+      //  v2 = v1 + LV - (z + y)
+      //  v3 = v2 + LV
+      //  v4 = v3 + LV - (z + y)
+      // profondeur: pattern /4 -> [deepP, deepP+step, deepP+step, deepP]
+      let xM = -TW / 2;
       for (let i = 0; i < leaves; i++) {
         const mod = i % 4;
-        const depth = mod === 0 || mod === 3 ? 0 : stepDepthMm; // 0, step, step, 0, ...
-
-        if (i === 0) {
-          leafOrigins.push({ xMm: 0, zMm: depth });
-          xAcc = LVmm - zMm; // pour i=1
+        const zM = mod === 0 || mod === 3 ? deepPM : deepPM + stepDepthM;
+        leafOrigins.push({ xM, zM });
+        if (i === 0 || i === 2) {
+          xM += mmToM(LVmm - (offZmm + offYmm));
         } else {
-          leafOrigins.push({ xMm: xAcc, zMm: depth });
-          const add = i % 2 === 0 ? LVmm : LVmm - zMm; // pair: +LV ; impair: +LV - z
-          xAcc += add;
+          xM += mmToM(LVmm);
         }
       }
     } else {
-      // Fallback (comportement simple si arrangement inconnu) : enchaînement simple
+      // fallback: comme simple
+      let xM = -TW / 2;
       for (let i = 0; i < leaves; i++) {
-        leafOrigins.push({ xMm: xAcc, zMm: 0 });
-        xAcc += LVmm;
+        leafOrigins.push({ xM, zM: deepPM });
+        xM += mmToM(LVmm);
       }
     }
 
-    // Pour chaque vantail : 2 poignées
-    // - poignée gauche à xLeaf
-    // - panneau commence à xLeaf + z
-    // - poignée droite à xLeaf + z + width + z = xLeaf + LV
-    //   -> on la met en miroir (rotation Y + π)
+    // Deux poignées par vantail :
+    // - Gauche : à l'origine du vantail
+    // - Droite : à l'extrémité du vantail (miroir réel, + longueur en Y)
     for (let leafIdx = 0; leafIdx < leaves; leafIdx++) {
-      const origin = leafOrigins[leafIdx] || { xMm: 0, zMm: 0 };
-      const xLeafM = mmToM(origin.xMm);
-      const zLeafM = mmToM(origin.zMm);
+      const { xM: baseXM, zM: baseZM } = leafOrigins[leafIdx] || {
+        xM: -TW / 2,
+        zM: deepPM,
+      };
 
-      // Poignée 1 (gauche)
+      // Gauche
       list.push({
         key: `handle-${leafIdx + 1}-L`,
         ref: hRef,
-        position: V(xLeafM, yHandle, zLeafM),
+        position: V(baseXM, yLeftM, baseZM),
         rotation: V(m.rot.x, m.rot.y, m.rot.z),
-        scale: V(1, 1, 1),
+        scale: handleScale,
         finishCode,
         visible: true,
       });
 
-      // Poignée 2 (droite, en miroir)
-      const xRightM = mmToM(origin.xMm + LVmm); // xLeaf + LV
+      // Droite (miroir sur Z + π, et rehaussée d'une longueur)
+      const xRightM = baseXM + mmToM(LVmm); // à l'extrémité droite du vantail
       list.push({
         key: `handle-${leafIdx + 1}-R`,
         ref: hRef,
-        position: V(xRightM, yHandle, zLeafM),
-        rotation: V(m.rot.x, m.rot.y + Math.PI, m.rot.z), // miroir sur Y
-        scale: V(1, 1, 1),
+        position: V(xRightM, yRightM, baseZM),
+        rotation: V(m.rot.x, m.rot.y, m.rot.z + Math.PI),
+        scale: handleScale,
         finishCode,
         visible: true,
       });
     }
   }
+
   // TRAVERSES INTERMÉDIAIRES par vantail
   const tiRef = geometry.profiles.traverses.intermediate.ref; // ex: TI28
   const byLeaf = geometry.profiles.traverses.intermediate.byLeaf || {}; // { '1':[h1,h2], '2':[...], ... }
@@ -322,3 +340,31 @@ export function buildInstances(geometry) {
 
   return list;
 }
+
+// Ajoutons maintenant les traverses :
+// THB52 :
+//   Si gamme = 96CA (sur chaque vantail):
+//     - Une traverse en bas positionnée (x: y+z-2, y: yLeftM, z: deepPM)
+//     - Une haut positionnée (x: y+z-2, y: yLeftM + handleScale, z: deepPM) avec une rotation sur x de 180deg.
+//     - Appliquer aux 2 traverses une scale de profiles.traverses.top.lenght sur l'axe x.
+// TI28 :
+//   Si gamme = 96CA et profiles.traverses.intermediate.type=28:
+//   - Infos dans profiles.traverses.intermediate
+//   - byLeaf indique le vantail concerné, la quantité de traverses, et leurs hauteurs
+//   - Positionner les traverses en (x: y+z-2, y: yLeftM + hauteur traverse, z: deepPM)
+// TI37 :
+//   Si gamme = 96CA et profiles.traverses.intermediate.type=37:
+//   - Infos dans profiles.traverses.intermediate
+//   - byLeaf indique le vantail concerné, la quantité de traverses, et leurs hauteurs
+//   - Positionner les traverses en (x: y+z-2, y: yLeftM + hauteur traverse, z: deepPM)
+// TI16 :
+// Si gamme = 96 et overall.tick=16 :
+// - Infos dans profiles.traverses.intermediate
+// - byLeaf indique le vantail concerné, la quantité de traverses, et leurs hauteurs
+// - Positionner les traverses en (x: z+t, y: yLeftM + hauteur traverse, z: deepPM)
+
+// TI19 :
+// Si gamme = 96 et overall.tick=19 :
+// - Infos dans profiles.traverses.intermediate
+// - byLeaf indique le vantail concerné, la quantité de traverses, et leurs hauteurs
+// - Positionner les traverses en (x: z+t, y: yLeftM + hauteur traverse, z: deepPM)

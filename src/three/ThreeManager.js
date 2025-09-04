@@ -129,7 +129,18 @@ export class ThreeManager {
   async applyInstances(instances = []) {
     const wanted = new Map(instances.map((it) => [it.key, it]));
 
-    // --- 0) Pré-nettoyage strict des rails (évite tout empilement si ref change)
+    // --- A) Purge des poignées "non voulues" (ex: ancien handle-1 par défaut)
+    for (const child of [...this.root.children]) {
+      const name = child.name || "";
+      const isHandle = name === "handle-1" || name.startsWith("handle-");
+      if (!isHandle) continue;
+      if (!wanted.has(name)) {
+        this.root.remove(child);
+        if (this.nodes.get(name) === child) this.nodes.delete(name);
+      }
+    }
+
+    // --- B) Pré-nettoyage strict des rails (empêche tout empilement si ref change)
     const railKeys = new Set(["rail-top", "rail-bottom"]);
     for (const child of [...this.root.children]) {
       if (railKeys.has(child.name)) {
@@ -142,7 +153,36 @@ export class ThreeManager {
       }
     }
 
-    // --- 1) Supprimer ce qui n’est plus voulu (toutes catégories)
+    // --- C) Purge des DOUBLONS pour toutes les catégories :
+    //       si plusieurs Object3D portent le même name (key), on garde
+    //       celui référencé par this.nodes (s'il existe), sinon le premier,
+    //       et on supprime tous les autres.
+    const seen = new Map(); // name -> child retenu
+    for (const child of [...this.root.children]) {
+      const name = child.name || "";
+      if (!name) continue;
+
+      // cible seulement les clés gérées par 'wanted'
+      if (!wanted.has(name)) continue;
+
+      const tracked = this.nodes.get(name) || null;
+      const keeper = tracked || seen.get(name) || null;
+
+      if (!keeper) {
+        // premier vu : s'il n'y a pas de tracked, on retient celui-ci
+        seen.set(name, child);
+        if (!tracked) this.nodes.set(name, child); // resynchronise le registre
+        continue;
+      }
+
+      // S'il existe déjà un keeper (ou un tracked) différent -> on supprime ce doublon
+      if (keeper !== child) {
+        this.root.remove(child);
+        // ne touche pas à nodes (le keeper reste enregistré)
+      }
+    }
+
+    // --- D) Supprimer tout node suivi qui n'est plus voulu
     for (const [key, node] of [...this.nodes]) {
       if (!wanted.has(key)) {
         this.root.remove(node);
@@ -150,7 +190,7 @@ export class ThreeManager {
       }
     }
 
-    // --- 2) Créer / mettre à jour (et remplacer si ref différente)
+    // --- E) Créer / mettre à jour (et remplacer si la ref diffère)
     for (const inst of instances) {
       let node = this.nodes.get(inst.key);
 
@@ -176,7 +216,7 @@ export class ThreeManager {
         newNode.scale.set(inst.scale.x, inst.scale.y, inst.scale.z);
         newNode.visible = inst.visible !== false;
 
-        // Matériaux (au cas où la finition change en même temps que la ref)
+        // Matériaux (au cas où la finition change en même temps)
         if (this.matLib) {
           const mat = this.matLib.getMaterial(inst.finishCode);
           if (mat)
@@ -191,12 +231,12 @@ export class ThreeManager {
         continue; // on a déjà tout appliqué pour ce node
       }
 
-      // Transforms (toujours à jour)
+      // Transforms (toujours up-to-date)
       node.position.set(inst.position.x, inst.position.y, inst.position.z);
       node.rotation.set(inst.rotation.x, inst.rotation.y, inst.rotation.z);
       node.scale.set(inst.scale.x, inst.scale.y, inst.scale.z);
 
-      // Matériaux (au cas où la finition change sans changement de ref)
+      // Matériaux (si seule la finition change)
       if (this.matLib) {
         const mat = this.matLib.getMaterial(inst.finishCode);
         if (mat)

@@ -220,11 +220,23 @@ export const AccessoriesCalculator = {
         qty: 2,
         role: "capot",
         designation: "Capot monorail haut",
+        finishLabel: "Noir",
       });
       push(list, "CAPOTRB48", {
         qty: 2,
         role: "capot",
         designation: "Capot monorail bas",
+        finishLabel: "Noir",
+      });
+    }
+
+    /* -------------- Equerres de suspension  — uniquement rail simple ---------------- */
+    if (railType === "simple") {
+      push(list, "EQUERSUSPM", {
+        qty: Math.ceil((width * leaves * 2) / 500),
+        role: "equerre",
+        designation: "Équerre de suspension + vis",
+        finishLabel: "Noir",
       });
     }
 

@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { PMREMGenerator } from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 const mmToM = (v) => (Number(v) || 0) / 1000;
 
@@ -21,6 +23,17 @@ export class ThreeManager {
     // Scène & camera
     this.scene = new THREE.Scene();
     this.scene.background = null; // transparent
+
+    // Tonemapping déjà conseillé
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
+
+    // Environment map procédural pour reflets (miroir/verre)
+    this.pmremGen = new PMREMGenerator(this.renderer);
+    const envTex = this.pmremGen.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = envTex; // <-- crucial pour que MIRROR/GLASS réagissent
+    // this.scene.background = envTex; // (optionnel) si tu veux un fond HDR ; sinon laisse null
 
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
     this.camera = new THREE.PerspectiveCamera(45, aspect, 0.01, 1000);
@@ -118,6 +131,16 @@ export class ThreeManager {
     return clone;
   }
 
+  createBoxMesh(size) {
+    const geo = new THREE.BoxGeometry(size.width, size.height, size.depth);
+    const mat = this.matLib
+      ? this.matLib.getMaterial(null)
+      : new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData = { kind: "box", size: { ...size } };
+    return mesh;
+  }
+
   /**
    * Diff d’instances : `instances` est une liste plane de:
    * { key, ref, position:{x,y,z}, rotation:{x,y,z}, scale:{x,y,z}, finishCode }
@@ -128,6 +151,32 @@ export class ThreeManager {
    */
   async applyInstances(instances = []) {
     const wanted = new Map(instances.map((it) => [it.key, it]));
+
+    for (const child of [...this.root.children]) {
+      const name = child.name || "";
+      const isTHB = name.startsWith("traverse-");
+      if (!isTHB) continue;
+
+      const inst = wanted.get(name);
+      // si la clé n'est plus voulue OU si la ref a changé -> on retire l'objet
+      if (!inst || (child.userData?.ref && child.userData.ref !== inst.ref)) {
+        this.root.remove(child);
+        if (this.nodes.get(name) === child) this.nodes.delete(name);
+      }
+    }
+
+    for (const child of [...this.root.children]) {
+      const name = child.name || "";
+      const isCorner = name.startsWith("corner-");
+      if (!isCorner) continue;
+
+      const inst = wanted.get(name);
+      // si la clé n'est plus voulue OU si la ref a changé -> on retire l'objet
+      if (!inst || (child.userData?.ref && child.userData.ref !== inst.ref)) {
+        this.root.remove(child);
+        if (this.nodes.get(name) === child) this.nodes.delete(name);
+      }
+    }
 
     // --- A) Purge des poignées "non voulues" (ex: ancien handle-1 par défaut)
     for (const child of [...this.root.children]) {
@@ -196,10 +245,35 @@ export class ThreeManager {
 
       // Créer si absent
       if (!node) {
-        node = await this.instantiate(inst.ref);
+        if (inst.type === "box" && inst.box) {
+          node = this.createBoxMesh(inst.box);
+        } else {
+          node = await this.instantiate(inst.ref);
+        }
         node.name = inst.key;
         this.root.add(node);
         this.nodes.set(inst.key, node);
+      }
+
+      // Si c'est une box et que la taille a changé -> on remplace la géométrie
+      if (inst.type === "box" && inst.box) {
+        const prev = node.userData?.size;
+        if (
+          !node.userData ||
+          node.userData.kind !== "box" ||
+          !prev ||
+          prev.width !== inst.box.width ||
+          prev.height !== inst.box.height ||
+          prev.depth !== inst.box.depth
+        ) {
+          // recrée proprement la mesh box
+          const parent = node.parent || this.root;
+          parent.remove(node);
+          node = this.createBoxMesh(inst.box);
+          node.name = inst.key;
+          parent.add(node);
+          this.nodes.set(inst.key, node);
+        }
       }
 
       // Ref différente -> remplacement dur (évite empilement)
@@ -291,5 +365,9 @@ export class ThreeManager {
     });
     this.nodes.clear();
     this.modelCache.clear();
+    if (this.pmremGen) {
+      this.pmremGen.dispose();
+      this.pmremGen = null;
+    }
   }
 }

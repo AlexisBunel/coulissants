@@ -131,8 +131,8 @@ export const profils = [
     designation: "Poignée P810",
     gammes: ["96CA"],
     finitions: ["BI", "BR", "LBL", "LBLG", "LNOG", "SA"],
-    y: 25,
-    z: 9,
+    y: 9,
+    z: 28,
     t: 16,
   },
   {

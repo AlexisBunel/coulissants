@@ -47,6 +47,36 @@ export function createMaterialLibrary() {
     BR: { color: 0xaaaaaa, metalness: 0.0, roughness: 0.9, name: "Brut" },
   };
 
+  const BOX_MATERIALS = {
+    // Blanc crème (standard)
+    CREAM: () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0xccae7e), // crème chaud (ajuste si besoin)
+        roughness: 1,
+      }),
+    // Verre
+    GLASS: () =>
+      new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(0xd9ffff),
+        metalness: 0,
+        roughness: 1,
+        envMapIntensity: 1,
+        clearcoat: 1,
+        transparent: true,
+        transmission: 1,
+        opacity: 0.4,
+        reflectivity: 0.2,
+      }),
+    // Miroir
+    MIRROR: () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0xffffff),
+        metalness: 1.0,
+        roughness: 0.02, // quasi lisse
+        envMapIntensity: 1.0, // profitera d’un envMap si présent
+      }),
+  };
+
   // Cache partagé de matériaux THREE (1 instance par finition)
   const matCache = new Map();
 
@@ -60,8 +90,25 @@ export function createMaterialLibrary() {
 
   function getMaterial(finishCode) {
     const code = String(finishCode || "").toUpperCase();
-    const def = FINISHES[code] || FINISHES.BR; // fallback brut
-    if (!matCache.has(code)) matCache.set(code, materialFrom(def));
+
+    // Matériaux spéciaux pour les "box"
+    if (BOX_MATERIALS[code]) {
+      if (!matCache.has(code)) matCache.set(code, BOX_MATERIALS[code]());
+      return matCache.get(code);
+    }
+
+    // Palette "profils" par défaut
+    const def = FINISHES[code] || FINISHES.BR;
+    if (!matCache.has(code)) {
+      matCache.set(
+        code,
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(def.color),
+          metalness: def.metalness,
+          roughness: def.roughness,
+        })
+      );
+    }
     return matCache.get(code);
   }
 

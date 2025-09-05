@@ -273,6 +273,7 @@ export const useDerivedStore = defineStore("derived", () => {
           y: Number(r?.handle?.y) || 0, // <-- nouveau
           z: Number(r?.handle?.z) || 0, // <-- nouveau
           c: Number(r?.handle?.c) || 0, // <-- nouveau
+          t: Number(r?.handle?.t) || 0, // <-- nouveau
         },
         corner: pack(r?.corner),
         traverses: {

@@ -17,6 +17,7 @@ export const ProfilesCalculator = {
 
     const fillingWidth = getFillingWidth(
       railType,
+      range,
       arrangement,
       W,
       z,
@@ -49,6 +50,7 @@ export const ProfilesCalculator = {
           y: Number(y) || 0,
           z: Number(z) || 0,
           c: Number(c) || 0,
+          t: Number(t) || 0,
         }
       : null;
 
@@ -136,12 +138,22 @@ function getVariablesFromProfiles(handleRef) {
   return { y, z, c, t, found: !!meta };
 }
 
-function getFillingWidth(railType, arrangement, W, z, y, leaves) {
+function getFillingWidth(railType, range, arrangement, W, z, y, leaves) {
   if (railType === "double") {
-    if (arrangement === "centre") {
-      return Math.max(0, Math.floor((W - 4 * z + y * 2) / 4));
+    if (range !== "96CA") {
+      if (arrangement === "centre") {
+        return Math.max(0, Math.floor((W - 4 * z + y * 2) / 4));
+      }
+      return Math.max(0, Math.floor((W - 2 * z + y * (leaves - 1)) / leaves));
+    } else {
+      if (arrangement === "centre") {
+        return Math.max(0, Math.floor((W - 4 * z - (37 - y * 2) * 2) / 4));
+      }
+      return Math.max(
+        0,
+        Math.floor(W - 2 * z - (37 - 2 * y) * (leaves - 1)) / leaves
+      );
     }
-    return Math.max(0, Math.floor((W - 2 * z + y * (leaves - 1)) / leaves));
   }
   return Math.max(0, Math.floor(W - 2 * z));
 }

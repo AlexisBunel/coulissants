@@ -18,9 +18,9 @@ onMounted(() => {
   three = new ThreeManager(canvasEl.value, { baseUrl: "/glb" }); // adapte le dossier
   matLib = createMaterialLibrary();
   three.setMaterialLibrary(matLib);
-
   // Premier rendu
   three.update({ geometry: geometry.value, buildInstances });
+  window.__three = three;
 });
 
 // Réactivité : dès que `geometry` change -> on met à jour la scène

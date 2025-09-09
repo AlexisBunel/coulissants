@@ -9,13 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.0.10",
     "@vueuse/core": "^13.7.0",
     "pinia": "^3.0.3",
-    "three": "^0.179.1",
+    "three": "0.155.0",
     "vue": "^3.5.18"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
+    "netlify-cli": "^23.5.1",
     "vite": "^7.1.2",
     "vite-plugin-vue-devtools": "^8.0.1"
   }

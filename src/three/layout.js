@@ -1,4 +1,3 @@
-import * as THREE from "three";
 const mmToM = (v) => (Number(v) || 0) / 1000;
 const V = (x = 0, y = 0, z = 0) => ({ x, y, z });
 

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>AR Viewer</title>
+    <script
+      type="module"
+      src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"
+    ></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto;
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      model-viewer {
+        width: 100%;
+        height: 60vh;
+        display: block;
+        background: #f6f6f6;
+        border-radius: 16px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-top: 12px;
+      }
+      button {
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        background: #111;
+        color: #fff;
+        font-weight: 600;
+      }
+      .meta {
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <model-viewer
+        id="mv"
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        camera-controls
+        camera-orbit="0deg 75deg 100%"
+        exposure="1"
+        shadow-intensity="0"
+        alt="Aperçu 3D"
+      ></model-viewer>
+      <!-- <div class="row">
+        <button id="btn">Passer en réalité augmentée</button>
+        <div class="meta" id="title"></div>
+      </div>
+      <div
+        class="row"
+        style="
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+          margin-top: 16px;
+        "
+      >
+        <div>URL iOS (USDZ): <code id="usdz-url"></code></div>
+        <a
+          id="quicklook-link"
+          rel="ar"
+          href="#"
+          style="text-decoration: underline"
+          >🔗 Ouvrir avec Quick Look (test direct)</a
+        >
+        <button id="check-usdz">Vérifier USDZ (HEAD + taille)</button>
+        <pre
+          id="usdz-report"
+          style="
+            white-space: pre-wrap;
+            background: #f8f8f8;
+            padding: 8px;
+            border-radius: 8px;
+          "
+        ></pre>
+      </div> -->
+    </div>
+
+    <script type="module">
+      const u = new URL(location.href);
+      const glb = u.searchParams.get("glb") || "";
+      const usdz = u.searchParams.get("usdz") || "";
+
+      const mv = document.getElementById("mv");
+      mv.src = glb;
+      if (usdz) mv.setAttribute("ios-src", usdz);
+
+      // 1) Afficher l'URL iOS (lisible) et le lien Quick Look direct
+      const usdzDecoded = decodeURIComponent(usdz);
+      // document.getElementById("usdz-url").textContent = usdzDecoded;
+      // const ql = document.getElementById("quicklook-link");
+      // ql.href = usdzDecoded;
+
+      // 2) Vérif USDZ (HEAD + taille)
+      // document
+      //   .getElementById("check-usdz")
+      //   .addEventListener("click", async () => {
+      //     const out = document.getElementById("usdz-report");
+      //     out.textContent = "...";
+      //     try {
+      //       const head = await fetch(usdzDecoded, { method: "HEAD" });
+      //       const ct = head.headers.get("content-type");
+      //       const cl = head.headers.get("content-length");
+      //       const resp = await fetch(usdzDecoded);
+      //       const blob = await resp.blob();
+      //       out.textContent =
+      //         `HEAD status: ${head.status}\n` +
+      //         `Content-Type: ${ct}\n` +
+      //         `Content-Length (HEAD): ${cl}\n` +
+      //         `Taille réelle (GET blob.size): ${blob.size} octets`;
+      //     } catch (e) {
+      //       out.textContent = "Erreur de vérification: " + (e?.message || e);
+      //     }
+      //   });
+      // document
+      //   .getElementById("btn")
+      //   .addEventListener("click", () => mv.activateAR && mv.activateAR());
+    </script>
+  </body>
+</html>

@@ -1,7 +1,5 @@
-// netlify/functions/upload-ar.js
+// netlify/functions/upload-ar.mjs
 import { getStore } from "@netlify/blobs";
-
-export const config = { path: "/api/upload-ar" };
 
 export default async (req) => {
   if (req.method !== "POST")
@@ -12,53 +10,47 @@ export default async (req) => {
 
   const form = await req.formData();
   const configId = String(form.get("configId") || "").trim();
-  const fileGlb = form.get("file_glb");
-  const fileUsdz = form.get("file_usdz");
   const title = String(form.get("title") || `Config ${configId}`);
+  const fileGlb = form.get("file_glb"); // File (Blob)
+  const fileUsdz = form.get("file_usdz"); // File (Blob)
 
-  if (!configId || !fileGlb || !fileUsdz)
+  if (!configId || !fileGlb || !fileUsdz) {
     return new Response("Missing fields", { status: 400 });
+  }
 
-  const storeName = "ar-models";
-  const store = getStore(storeName);
+  // ✅ Convertir en buffers réutilisables (évite les streams)
+  const glbBuf = new Uint8Array(await fileGlb.arrayBuffer());
+  const usdzBuf = new Uint8Array(await fileUsdz.arrayBuffer());
+  const glbSize = glbBuf.byteLength;
+  const usdzSize = usdzBuf.byteLength;
+
+  // (optionnel) barrière de taille pour éviter les 502 si trop gros
+  const total = glbSize + usdzSize;
+  const MAX = 8 * 1024 * 1024; // ≈ 8 Mo (functions sync)
+  if (total > MAX) {
+    console.log("upload-ar TOO BIG", { glbSize, usdzSize, total });
+    return new Response("Payload too large", { status: 413 });
+  }
+
+  const store = getStore("ar-models");
   const keyGlb = `${configId}.glb`;
   const keyUsdz = `${configId}.usdz`;
 
-  await store.set(keyGlb, fileGlb.stream(), {
+  // ✅ Donner un “body” réutilisable (pas .stream())
+  const glbMeta = await store.set(keyGlb, glbBuf, {
     contentType: "model/gltf-binary",
     cacheControl: "public, max-age=31536000, immutable",
   });
-  await store.set(keyUsdz, fileUsdz.stream(), {
+  const usdzMeta = await store.set(keyUsdz, usdzBuf, {
     contentType: "model/vnd.usdz+zip",
     cacheControl: "public, max-age=31536000, immutable",
   });
 
-  // URLs RELATIVES (résolues par le navigateur selon le host courant)
-  const glbRel = `/api/blob?store=${encodeURIComponent(
-    storeName
-  )}&key=${encodeURIComponent(keyGlb)}`;
-  const usdzRel = `/api/blob?store=${encodeURIComponent(
-    storeName
-  )}&key=${encodeURIComponent(keyUsdz)}`;
-
-  // ORIGIN PUBLIC en --live via en-têtes, sinon local/prod automatique
-  const fwdHost = req.headers.get("x-forwarded-host");
-  const fwdProto = req.headers.get("x-forwarded-proto");
-  const base = new URL(req.url);
-  const proto = fwdProto || base.protocol.replace(":", "") || "https";
-  const host = fwdHost || base.host;
-  const origin = `${proto}://${host}`;
-
-  const mobileUrl = `${origin}/ar.html?glb=${encodeURIComponent(
-    glbRel
-  )}&usdz=${encodeURIComponent(usdzRel)}&title=${encodeURIComponent(
-    title
-  )}&id=${encodeURIComponent(configId)}`;
-
+  // URL relatives côté client (Android peut viser /api/blob..., iOS aura /usdz/:id)
   return Response.json({
-    glb: glbRel,
-    usdz: usdzRel,
     id: configId,
     title,
+    glb: `/api/blob?store=ar-models&key=${encodeURIComponent(keyGlb)}`,
+    usdz: `/api/blob?store=ar-models&key=${encodeURIComponent(keyUsdz)}`,
   });
 };

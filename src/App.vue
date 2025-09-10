@@ -209,7 +209,11 @@ onMounted(() => {
       form.append("file_usdz", usdzBlob, `${configId}.usdz`);
 
       btn.textContent = "Upload…";
-      const r = await fetch("/api/upload-ar", { method: "POST", body: form });
+      // const r = await fetch("/api/upload-ar", { method: "POST", body: form });
+      const r = await fetch("/.netlify/functions/upload-ar", {
+        method: "POST",
+        body: form,
+      });
       if (!r.ok) throw new Error("Upload failed");
       const { glb, title: t, id } = await r.json();
 

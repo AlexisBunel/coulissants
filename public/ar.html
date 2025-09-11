@@ -59,11 +59,11 @@
         shadow-intensity="0"
         alt="Aperçu 3D"
       ></model-viewer>
-      <!-- <div class="row">
+      <div class="row">
         <button id="btn">Passer en réalité augmentée</button>
-        <div class="meta" id="title"></div>
+        <!-- <div class="meta" id="title"></div> -->
       </div>
-      <div
+      <!-- <div
         class="row"
         style="
           flex-direction: column;
@@ -129,9 +129,9 @@
       //       out.textContent = "Erreur de vérification: " + (e?.message || e);
       //     }
       //   });
-      // document
-      //   .getElementById("btn")
-      //   .addEventListener("click", () => mv.activateAR && mv.activateAR());
+      document
+        .getElementById("btn")
+        .addEventListener("click", () => mv.activateAR && mv.activateAR());
     </script>
   </body>
 </html>

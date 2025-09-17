@@ -11,6 +11,7 @@
   "dependencies": {
     "@netlify/blobs": "^10.0.10",
     "@vueuse/core": "^13.7.0",
+    "jspdf": "^3.0.2",
     "pinia": "^3.0.3",
     "three": "0.155.0",
     "vue": "^3.5.18"

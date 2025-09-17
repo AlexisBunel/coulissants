@@ -174,10 +174,18 @@ export function buildInstances(geometry) {
   if (railType === "simple") {
     // latéral: v1 = -TW/2 ; v(n+1) = v(n) + LV
     // profondeur: tous = deepP
-    let xM = -TW / 2;
-    for (let i = 0; i < leaves; i++) {
-      leafOrigins.push({ xM, zM: deepPM });
-      xM += mmToM(LVmm);
+    if (leaves === 1) {
+      let xM = -TW / 2;
+      for (let i = 0; i < leaves; i++) {
+        leafOrigins.push({ xM, zM: 0 });
+        xM += mmToM(LVmm);
+      }
+    } else {
+      let xM = -mmToM(LVmm);
+      for (let i = 0; i < leaves; i++) {
+        leafOrigins.push({ xM, zM: 0 });
+        xM += mmToM(LVmm);
+      }
     }
   } else if (railType === "double" && arrangement === "quinconce") {
     // latéral: v1 = -TW/2 ; v(n+1) = v(n) + LV - (z + y)
@@ -485,7 +493,6 @@ export function buildInstances(geometry) {
   const rDepth = getRTickM(); // épaisseur panneau (m)
   const rHeight = mmToM(handleLengthMm); // hauteur (m) (ton choix actuel)
   const rWidth = mmToM(geometry?.fillings?.widthPerLeaf || 0); // largeur (m)
-
   for (let leafIdx = 0; leafIdx < leaves; leafIdx++) {
     const { xM: baseXM, zM: baseZM } = leafOrigins[leafIdx];
 
@@ -498,7 +505,6 @@ export function buildInstances(geometry) {
     const zRM = baseZM;
 
     const finishCode = fillingToFinishCode(geometry?.overall?.filling);
-
     list.push({
       key: `filling-${leafIdx + 1}`,
       type: "box", // <<< NOUVEAU : instance procédurale

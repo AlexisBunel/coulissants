@@ -24,19 +24,12 @@
       <AccessoriesTable />
       <FillingsTable />
     </section>
-    <section
-      style="
-        margin-top: 16px;
-        padding: 12px;
-        border: 1px solid #eee;
-        border-radius: 12px;
-      "
-    >
+    <section id="qrcode" style="margin-top: 16px; padding: 12px">
       <h3>Réalité augmentée</h3>
       <div
         style="display: flex; gap: 8px; align-items: center; margin: 0.5rem 0"
       >
-        <input
+        <!-- <input
           id="ar-title"
           placeholder="Titre (facultatif)"
           style="
@@ -45,7 +38,7 @@
             border: 1px solid #ddd;
             border-radius: 8px;
           "
-        />
+        /> -->
         <button
           id="ar-run"
           style="
@@ -56,7 +49,7 @@
             color: #fff;
           "
         >
-          Exporter + QR
+          Générer le QRCode
         </button>
       </div>
       <canvas
@@ -67,6 +60,7 @@
       ></canvas>
       <p id="ar-link"></p>
     </section>
+    <ExportSection />
   </main>
 </template>
 
@@ -83,6 +77,7 @@ import ProfilesTable from "./components/summaries/ProfilesTable.vue";
 import AccessoriesTable from "./components/summaries/AccessoriesTable.vue";
 import FillingsTable from "./components/summaries/FillingsTable.vue";
 import Canvas3D from "./components/Canvas3D.vue";
+import ExportSection from "./components/ExportSection.vue";
 
 import * as THREE from "three";
 import { onMounted } from "vue";
@@ -235,7 +230,7 @@ onMounted(() => {
       cnv.style.display = "block";
       link.innerHTML = `<a href="${mobileUrl}" target="_blank" rel="noopener">Ouvrir la page mobile</a>`;
 
-      btn.textContent = "Exporter + QR";
+      btn.textContent = "Générer le QRCode";
     } catch (e) {
       console.error(e);
       alert("Erreur export/upload AR");

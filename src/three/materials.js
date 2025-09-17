@@ -86,13 +86,14 @@ export function createMaterialLibrary() {
         opacity: 0.4,
         reflectivity: 0.2,
       }),
-    // Miroir
     MIRROR: () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xffffff),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
         metalness: 1.0,
-        roughness: 0.02, // quasi lisse
-        envMapIntensity: 1.0, // profitera d’un envMap si présent
+        roughness: 0.02,
+        envMapIntensity: 2.0, // n’hésite pas à 3–4 si besoin
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.03,
       }),
   };
 

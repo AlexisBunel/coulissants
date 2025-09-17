@@ -103,6 +103,14 @@ watch(
     }
   }
 );
+watch(
+  () => config.leavesCount,
+  (newLeavesCount) => {
+    if (newLeavesCount != 4) {
+      config.arrangement = "quinconce";
+    }
+  }
+);
 </script>
 
 <template>

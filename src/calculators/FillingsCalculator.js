@@ -1,31 +1,3 @@
-// src/calculators/FillingsCalculator.js
-/**
- * Calcule les dédits des remplissages (largeur & hauteurs) par vantail.
- * + Normalisation "uniforme": si les traverses sont (quasi) équidistantes,
- *   on égalise les hauteurs pour obtenir des pièces identiques.
- *
- * Entrées:
- *  - range: '96' | '96CA' | (autres => traité comme '96')
- *  - height: hauteur totale du panneau (mm)
- *  - fillingWidth: largeur utile par vantail (mm)
- *  - traverseRef: 'TI28' | 'TI37' | 'TI16' | 'TI19' ... (utile pour 96CA)
- *  - tick: '16' | '19' | '6-8' | '12' ... (conservé pour évolutions)
- *  - leavesCount: nombre de vantaux
- *  - heightsByLeaf: { '1': number[], '2': number[], ... } centres TI (mm, bas -> haut)
- *  - uniform?: boolean  // facultatif: force l'égalisation
- *
- * Sortie:
- *  {
- *    perLeaf: {
- *      '1': {
- *        width: { raw, cut },
- *        heights: { bottom: number, between: number[], top: number|null }
- *      },
- *      ...
- *    },
- *    meta: { range, traverseRef, tick, normalized: boolean }
- *  }
- */
 export const FillingsCalculator = {
   compute(cfg = {}) {
     const range = String(cfg.range || "").toUpperCase();

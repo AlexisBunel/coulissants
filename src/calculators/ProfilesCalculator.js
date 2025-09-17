@@ -142,9 +142,12 @@ function getFillingWidth(railType, range, arrangement, W, z, y, leaves) {
   if (railType === "double") {
     if (range !== "96CA") {
       if (arrangement === "centre") {
-        return Math.max(0, Math.floor((W - 4 * z + y * 2) / 4));
+        return Math.max(0, Math.floor((W - 4 * z + (y - z) * 2) / 4));
       }
-      return Math.max(0, Math.floor((W - 2 * z + y * (leaves - 1)) / leaves));
+      return Math.max(
+        0,
+        Math.floor((W - 2 * z + (y - z) * (leaves - 1)) / leaves)
+      );
     } else {
       if (arrangement === "centre") {
         return Math.max(0, Math.floor((W - 4 * z - (37 - y * 2) * 2) / 4));

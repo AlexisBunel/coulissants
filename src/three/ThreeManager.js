@@ -6,6 +6,18 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 
 const mmToM = (v) => (Number(v) || 0) / 1000;
 
+function distanceToFitWH(fovDeg, aspect, W, H, padding = 1.5) {
+  // fov vertical
+  const vFov = (fovDeg * Math.PI) / 180;
+  // fov horizontal dérivé avec l'aspect
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+  const dForH = (H * padding) / (2 * Math.tan(vFov / 2));
+  const dForW = (W * padding) / (2 * Math.tan(hFov / 2));
+  return Math.max(dForH, dForW);
+}
+
+const waitRaf = () => new Promise((r) => requestAnimationFrame(r));
+
 export class ThreeManager {
   constructor(canvas, options = {}) {
     this.canvas = canvas;
@@ -16,6 +28,8 @@ export class ThreeManager {
       canvas,
       antialias: true,
       alpha: true,
+      preserveDrawingBuffer: true,
+      premultipliedAlpha: false,
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
@@ -27,13 +41,12 @@ export class ThreeManager {
     // Tonemapping déjà conseillé
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 1.8;
 
     // Environment map procédural pour reflets (miroir/verre)
     this.pmremGen = new PMREMGenerator(this.renderer);
     const envTex = this.pmremGen.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environment = envTex; // <-- crucial pour que MIRROR/GLASS réagissent
-    // this.scene.background = envTex; // (optionnel) si tu veux un fond HDR ; sinon laisse null
 
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
     this.camera = new THREE.PerspectiveCamera(45, aspect, 0.01, 1000);
@@ -369,5 +382,124 @@ export class ThreeManager {
       this.pmremGen.dispose();
       this.pmremGen = null;
     }
+  }
+  poseForDims({
+    widthMm,
+    heightMm,
+    unitScale = 0.001,
+    direction = [2.5, 1.6, 2.8],
+    padding = 1.5,
+    fov = null,
+  } = {}) {
+    const W = (Number(widthMm) || 0) * unitScale; // -> mètres
+    const H = (Number(heightMm) || 0) * unitScale;
+
+    if (fov != null) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+
+    const aspect = this.camera.aspect > 0 ? this.camera.aspect : 1.5;
+
+    // cible = centre vertical de la porte (on suppose y=0 au sol)
+    const tgtY = H / 2;
+    const tgt = new THREE.Vector3(0, tgtY, 0);
+
+    // distance pour cadrer W×H
+    const dist = distanceToFitWH(this.camera.fov, aspect, W, H, padding);
+
+    // normaliser la direction
+    let [dx, dy, dz] = direction;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    dx /= len;
+    dy /= len;
+    dz /= len;
+
+    // position = cible + direction * dist
+    const pos = new THREE.Vector3(
+      tgt.x + dx * dist,
+      tgt.y + dy * dist,
+      tgt.z + dz * dist
+    );
+
+    return { pos, tgt, dist };
+  }
+
+  /**
+   * Applique la pose par défaut selon des dimensions (mm) — modifie la vue utilisateur
+   */
+  applyDefaultPoseFromDims(opts) {
+    const { pos, tgt } = this.poseForDims(opts);
+    this.camera.position.copy(pos);
+    if (this.controls) {
+      this.controls.target.copy(tgt);
+      this.controls.update();
+    } else {
+      this.camera.lookAt(tgt);
+    }
+    this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Capture PNG depuis une pose auto (sans "casser" la vue de l'utilisateur).
+   * - met la caméra sur la pose calculée
+   * - attends 1–2 frames + gl.finish()
+   * - capture toDataURL
+   * - restaure la caméra
+   * @returns {Promise<{dataURL:string, width:number, height:number}>}
+   */
+  async captureWithAutoPose(opts) {
+    const { pos, tgt } = this.poseForDims(opts);
+
+    // sauvegarde de l'état
+    const prev = {
+      pos: this.camera.position.clone(),
+      quat: this.camera.quaternion.clone(),
+      fov: this.camera.fov,
+      target: this.controls ? this.controls.target.clone() : null,
+      autoClear: this.renderer.autoClear,
+    };
+
+    // appliquer la pose
+    this.camera.position.copy(pos);
+    if (this.controls) {
+      this.controls.target.copy(tgt);
+      this.controls.update();
+    } else {
+      this.camera.lookAt(tgt);
+    }
+    this.camera.updateProjectionMatrix();
+
+    // attendre frame(s) & rendre
+    await waitRaf();
+    this.renderer.autoClear = true;
+    this.renderer.render(this.scene, this.camera);
+    const gl = this.renderer.getContext();
+    try {
+      gl?.finish?.();
+    } catch {}
+    await waitRaf();
+    this.renderer.render(this.scene, this.camera);
+    try {
+      gl?.finish?.();
+    } catch {}
+
+    // capture
+    const canvas = this.renderer.domElement;
+    const dataURL = canvas.toDataURL("image/png");
+    const out = { dataURL, width: canvas.width, height: canvas.height };
+
+    // restauration état
+    this.camera.position.copy(prev.pos);
+    this.camera.quaternion.copy(prev.quat);
+    this.camera.fov = prev.fov;
+    this.camera.updateProjectionMatrix();
+    if (this.controls && prev.target) {
+      this.controls.target.copy(prev.target);
+      this.controls.update();
+    }
+    this.renderer.autoClear = prev.autoClear;
+
+    return out;
   }
 }
